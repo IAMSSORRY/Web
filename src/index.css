@@ -1,0 +1,20 @@
+@import "tailwindcss";
+@import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
+
+@theme {
+  --color-main-1: #1E1E1E;
+  --color-main-2: #212121;
+  --color-main-3: #242424;
+  --color-border: #343434;
+  --color-info: #CCCCCC;
+  --spacing-header: 4.5rem;
+  --font-sans: "Pretendard Variable", Pretendard, system-ui, sans-serif;
+}
+
+@layer base {
+  body {
+    font-family: var(--font-sans);
+    background-color: var(--color-main-1);
+    color: white;
+  }
+}
