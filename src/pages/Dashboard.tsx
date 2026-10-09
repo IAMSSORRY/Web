@@ -223,7 +223,9 @@ function AppleInfoCard({ judge }: { judge: LiveJudge | undefined }) {
             <Row label="빨강 비율" value={<Measured value={judge.v_value} limit={judge.threshold} />} />
           )}
           {judge.extra && <Row label="흠 비율" value={<Measured value={judge.extra.dark_ratio} limit={judge.extra.dark_max} />} />}
-          <Row label="신뢰도" value={pct(judge.confidence)} />
+          {/* 수동 입력 판정(v_value 가 null)은 신뢰도가 0.0 으로 오므로 숨긴다. */}
+          {judge.v_value !== null && <Row label="신뢰도" value={pct(judge.confidence)} />}
+          {judge.v_value === null && <p className="text-sm text-info">카메라 판정 없이 입력된 등급입니다</p>}
           {evidence && <p className="text-sm text-info">{evidence}</p>}
         </div>
       ) : (
@@ -316,32 +318,39 @@ function MissionCard({ mission }: { mission: MissionState | null }) {
 
 const f = (e: MissionEvent, key: string) => e[key] as number | string | boolean | null | undefined
 
-// 이벤트를 화면 문구로. 모르는 종류는 이름 그대로 보여준다.
-function describeEvent(e: MissionEvent): { text: string; tone?: string } {
+// 이벤트를 화면 문구로. 모르는 이벤트는 null 을 돌려 목록에서 뺀다(상태는 state 로 반영된다).
+function describeEvent(e: MissionEvent): { text: string; tone?: string } | null {
   switch (e.event) {
+    case 'start':
+      return { text: `미션 시작 (사과 ${f(e, 'apple_count')}개)` }
     case 'apple':
       return { text: `사과 ${f(e, 'index')} / ${f(e, 'total')} 시작` }
-    case 'phase':
-      return { text: phaseLabel[f(e, 'phase') as MissionPhase] ?? `단계: ${f(e, 'phase')}` }
+    case 'phase': {
+      const label = phaseLabel[f(e, 'phase') as MissionPhase]
+      return label ? { text: label } : null
+    }
     case 'pick': {
       const attempt = Number(f(e, 'attempt') ?? 0) + 1
       return f(e, 'ok')
         ? { text: `파지 성공 (폭 ${f(e, 'width_mm')}mm)` }
         : { text: `파지 실패 (${attempt}번째 시도)`, tone: 'text-grade-low' }
     }
-    case 'skip':
-      return { text: '사과 건너뜀', tone: 'text-grade-mid' }
-    case 'roll':
-      return { text: '굴림 감지', tone: 'text-grade-mid' }
+    case 'adaptive': {
+      const scale = Number(f(e, 'scale'))
+      const releaseH = Number(f(e, 'release_h'))
+      return {
+        text: `자동 조정: 하강 속도 ×${scale.toFixed(2)}, 놓는 높이 ${(releaseH * 100).toFixed(1)}cm${f(e, 'frozen') ? ' (중단)' : ''}`,
+        tone: scale < 1 || f(e, 'frozen') ? 'text-grade-mid' : '',
+      }
+    }
+    case 'end': {
+      const d = f(e, 'duration_s')
+      return { text: `미션 완료${typeof d === 'number' ? ` (${d.toFixed(1)}초)` : ''}`, tone: 'text-grade-high' }
+    }
     case 'estop':
       return { text: `비상정지${f(e, 'reason') ? `: ${polite(String(f(e, 'reason')))}` : ''}`, tone: 'text-grade-low' }
-    case 'finished':
-    case 'finish':
-      return { text: '미션 완료', tone: 'text-grade-high' }
-    case 'start':
-      return { text: '미션 시작' }
     default:
-      return { text: e.event }
+      return null
   }
 }
 
@@ -350,7 +359,9 @@ function MissionEventsCard({ events }: { events: MissionEvent[] }) {
     <Card title="로봇 이벤트" className="h-[330px]">
       <ul className="flex-1 overflow-y-auto px-5 pb-5 pt-4">
         {events.map((e, i) => {
-          const { text, tone = '' } = describeEvent(e)
+          const described = describeEvent(e)
+          if (!described) return null
+          const { text, tone = '' } = described
           return (
             <li key={`${e.ts}-${i}`} className="flex gap-4 border-t border-border py-2 first:border-t-0">
               <span className="shrink-0 tabular-nums text-white/50">{fmtTime(e.ts)}</span>
@@ -368,8 +379,9 @@ function MissionEventsCard({ events }: { events: MissionEvent[] }) {
 const GAUGE = { w: 167.274, h: 92, cx: 83.637, cy: 88, inner: 60 }
 
 function ConfidenceCard({ average }: { average: number | null }) {
-  // 0% 는 왼쪽 끝(-90°), 100% 는 오른쪽 끝(90°)
-  const angle = -90 + (average ?? 0) * 180
+  // 신뢰도는 임계값에서 떨어진 정도라 0.5~1.0 이다. 50% 를 왼쪽 끝(-90°), 100% 를 오른쪽 끝(90°)으로 둔다.
+  const ratio = Math.min(Math.max(((average ?? 0.5) - 0.5) / 0.5, 0), 1)
+  const angle = -90 + ratio * 180
 
   return (
     <Card title="신뢰도" className="h-[330px]">
@@ -453,7 +465,7 @@ function HistoryCard({ recent }: { recent: LiveJudge[] }) {
                 <td className="py-2 text-white/50">{r.id}</td>
                 <td>{fmtTime(r.ts)}</td>
                 <td className={`font-semibold ${gradeText[r.grade]}`}>{r.grade}</td>
-                <td>{pct(r.confidence)}</td>
+                <td>{r.v_value !== null ? pct(r.confidence) : '—'}</td>
                 <td>{r.v_value !== null && r.threshold !== null ? `${num(r.v_value)} / ${num(r.threshold)}` : '—'}</td>
                 <td>{r.extra ? `${num(r.extra.dark_ratio)} / ${num(r.extra.dark_max)}` : '—'}</td>
                 <td><RollBadge value={r.roll_detected} /></td>
@@ -645,9 +657,9 @@ export default function Dashboard() {
   const [runsKey, setRunsKey] = useState(0)
 
   const latest = judge.recent[0]
-  const average = judge.recent.length
-    ? judge.recent.reduce((sum, r) => sum + r.confidence, 0) / judge.recent.length
-    : null
+  // 수동 입력 판정(v_value 가 null, 신뢰도 0.0)은 평균에서 뺀다.
+  const measured = judge.recent.filter((r) => r.v_value !== null)
+  const average = measured.length ? measured.reduce((sum, r) => sum + r.confidence, 0) / measured.length : null
 
   // 헤더 연결상태. 화면에 쓰는 고정 카메라만 보고, 문제가 여러 개면 모두 함께 보여준다.
   const topCam = cameras?.cameras.find((c) => c.name === CAM)

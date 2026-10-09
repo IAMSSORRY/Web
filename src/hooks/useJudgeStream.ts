@@ -55,9 +55,12 @@ export function useJudgeStream() {
           setRecent((prev) => [judge, ...prev].slice(0, MAX_RECENT))
           lastJudge = judge
           persist([judge])
-          setActiveBox({ bbox, grade, cam })
-          clearTimeout(boxTimer)
-          boxTimer = setTimeout(() => setActiveBox(null), BOX_VISIBLE_MS)
+          // 수동 입력 판정은 bbox 가 [0,0,0,0] 으로 와서 그릴 위치가 없다.
+          if (v_value !== null && bbox[2] > 0 && bbox[3] > 0) {
+            setActiveBox({ bbox, grade, cam })
+            clearTimeout(boxTimer)
+            boxTimer = setTimeout(() => setActiveBox(null), BOX_VISIBLE_MS)
+          }
           break
         }
         case 'mission':
