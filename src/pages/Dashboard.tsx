@@ -315,10 +315,17 @@ function MissionCard({
   onControl: (action: ControlAction) => void
 }) {
   const running = robotState ? robotState === 'running' : mission?.status === 'running' || mission?.status === 'stalled'
-  const halted = robotState === 'estopped' || robotState === 'error' || mission?.status === 'estop'
+  const halted = robotState === 'estopped' || robotState === 'error'
+  // 로봇 프로그램에 닿지 못하면 시작 명령을 보낼 곳이 없다.
+  const offline = robotState === null
   const btn = 'rounded-full px-4 py-0.5 font-semibold disabled:opacity-40'
   // 처음 보는 status 가 와도 깨지지 않게 배지는 생략한다.
-  const status = mission ? (statusLabel[mission.status] ?? null) : null
+  // 로봇 프로그램에 닿지 못하면 서버의 비상정지 기록은 오래된 값일 수 있어 그대로 보여주지 않는다.
+  const status = !mission
+    ? null
+    : robotState === null && mission.status === 'estop'
+      ? { text: '연결 끊김', className: 'bg-border text-info' }
+      : (statusLabel[mission.status] ?? null)
   const index = mission?.apple_index ?? 0
   const count = mission?.apple_count ?? 0
 
@@ -343,8 +350,8 @@ function MissionCard({
             // 비상정지·오류 정지 중에는 시작할 수 없다. 해제(이어하기)로 다시 움직인다.
             <button
               onClick={() => onControl('start')}
-              disabled={pending !== null || halted}
-              title={halted ? '비상정지를 해제한 뒤 시작할 수 있습니다' : undefined}
+              disabled={pending !== null || halted || offline}
+              title={halted ? '비상정지를 해제한 뒤 시작할 수 있습니다' : offline ? '로봇 미션 프로그램에 연결할 수 없습니다' : undefined}
               className={`${btn} bg-white text-black`}
             >
               {pending === 'start' ? '시작 중' : '시작'}
@@ -368,7 +375,9 @@ function MissionCard({
                 {mission.status === 'finished'
                   ? `미션 완료${mission.duration_s !== null ? ` (${mission.duration_s.toFixed(1)}초)` : ''}`
                   : mission.status === 'estop'
-                    ? '비상정지'
+                    ? offline
+                      ? '로봇 상태 모름'
+                      : '비상정지'
                     : mission.status === 'stalled'
                       ? `${mission.phase ? `${phaseLabel[mission.phase] ?? mission.phase}에서 ` : ''}멈춤`
                       : mission.phase
@@ -399,6 +408,9 @@ function MissionCard({
             </p>
           )}
           {halted && <p className="text-sm font-semibold text-grade-low">비상정지 중 — 해제한 뒤 시작할 수 있습니다</p>}
+          {offline && (
+            <p className="text-sm font-semibold text-grade-mid">로봇 미션 프로그램에 연결할 수 없어 웹에서 제어할 수 없습니다</p>
+          )}
           {mission.status === 'stalled' && (
             <p className="text-sm font-semibold text-grade-mid">
               로봇 응답 없음{stalledReason(events) ? ` — ${stalledReason(events)}` : ''}
@@ -939,9 +951,20 @@ export default function Dashboard() {
             ...(arm?.ok === false
               ? [{ key: 'arm', label: '비상정지', level: 'down' as const, estop: true, detail: `로봇팔: ${polite(arm.message) ?? '로봇팔 상태를 확인하세요'}` }]
               : []),
-            // 로봇 프로그램 상태를 우선 보고, 못 받으면 미션 상태로 판단한다.
-            ...(robotState === 'estopped' || (robotState === null && judge.mission?.status === 'estop')
+            // 화면을 덮는 비상정지는 로봇 프로그램이 직접 알려줄 때만 띄운다.
+            // 로봇 프로그램에 닿지 못하면 서버의 미션 상태는 오래된 값일 수 있다(로봇 PC 에서 직접 해제한 경우 등).
+            ...(robotState === 'estopped'
               ? [{ key: 'estop', label: '비상정지', level: 'down' as const, estop: true, detail: polite(control?.error ?? judge.mission?.estop_reason) ?? '로봇이 비상정지했습니다' }]
+              : []),
+            ...(control === null
+              ? [{
+                  key: 'robot-offline',
+                  label: '로봇 연결 끊김',
+                  level: 'warn' as const,
+                  detail: `로봇 미션 프로그램에 연결할 수 없습니다(로봇 PC 에서 mission.py --serve 로 켜야 웹에서 제어할 수 있습니다).${
+                    judge.mission?.status === 'estop' ? ` 마지막 기록: 비상정지 — ${polite(judge.mission.estop_reason) ?? '원인 미상'}` : ''
+                  }`,
+                }]
               : []),
             ...(robotState === 'stopping'
               ? [{ key: 'stopping', label: '정리 중', level: 'warn' as const, detail: '사과를 되돌리고 팔을 내린 뒤 비상정지합니다' }]
