@@ -336,6 +336,10 @@ function describeEvent(e: MissionEvent): { text: string; tone?: string } | null 
         ? { text: `파지 성공 (폭 ${f(e, 'width_mm')}mm)` }
         : { text: `파지 실패 (${attempt}번째 시도)`, tone: 'text-grade-low' }
     }
+    case 'skip': {
+      const reason = f(e, 'reason')
+      return { text: `사과 ${f(e, 'index')} 건너뜀${reason ? ` (${polite(String(reason))})` : ''}`, tone: 'text-grade-mid' }
+    }
     case 'adaptive': {
       const scale = Number(f(e, 'scale'))
       const releaseH = Number(f(e, 'release_h'))

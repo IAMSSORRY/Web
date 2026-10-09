@@ -45,7 +45,10 @@ export function useJudgeStream() {
         .then((r) => {
           if (disposed) return
           setMission(r.state)
-          setMissionEvents([...(r.events ?? [])].reverse())
+          // 서버 이벤트는 회차 단위라 이전 미션 것도 섞여 온다. 현재 미션이 시작된 뒤의 것만 보여준다.
+          const since = r.state.started_at
+          const events = (r.events ?? []).filter((e) => since === null || e.ts >= since)
+          setMissionEvents(events.reverse())
         })
         .catch(() => {})
 
@@ -82,7 +85,8 @@ export function useJudgeStream() {
           setMission(msg.state)
           if (msg.event) {
             const event = msg.event
-            setMissionEvents((prev) => [event, ...prev].slice(0, MAX_EVENTS))
+            // 새 미션이 시작되면 이전 미션의 이벤트는 비운다.
+            setMissionEvents((prev) => (event.event === 'start' ? [event] : [event, ...prev].slice(0, MAX_EVENTS)))
           }
           break
         case 'stats':
