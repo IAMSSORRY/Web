@@ -720,7 +720,7 @@ function useMissionFinishedToast(mission: MissionState | null) {
 }
 
 // 비상정지 화면. 원인(카메라, 로봇팔, 로봇 비상정지)이 하나라도 있으면 화면 전체를 덮는다.
-// 닫으면 원인이 바뀌기 전까지 다시 띄우지 않는다(헤더에는 빨간 상태가 남는다).
+// 해제 요청이 성공하면 원인이 바뀌기 전까지 다시 띄우지 않는다.
 function EstopOverlay({ reasons }: { reasons: { key: string; detail: string }[] }) {
   const [clearing, setClearing] = useState(false)
   const [dismissedKey, setDismissedKey] = useState<string | null>(null)
@@ -742,33 +742,30 @@ function EstopOverlay({ reasons }: { reasons: { key: string; detail: string }[] 
   }
 
   return (
-    <div role="alertdialog" aria-modal="true" aria-labelledby="estop-title" className="fixed inset-0 z-[60] flex items-center justify-center bg-black/85 backdrop-blur-sm">
-      <div className="flex w-[520px] flex-col gap-6 rounded-xl border border-grade-low bg-main-3 p-8 shadow-card">
-        <div className="flex items-center gap-3">
-          <span className="size-3 rounded-full bg-grade-low" />
-          <h2 id="estop-title" className="text-2xl font-semibold">비상정지</h2>
-        </div>
-        <div className="flex flex-col gap-2">
-          {reasons.map((r) => (
-            <p key={r.key} className="text-lg">
-              {r.detail}
-            </p>
-          ))}
-          <p className="text-info">위 이유로 비상정지가 되었습니다. 비상정지를 해제하시겠습니까?</p>
-        </div>
-        <div className="flex justify-end gap-2">
-          <button onClick={() => setDismissedKey(key)} className="rounded-full px-5 py-2 text-info hover:bg-border">
-            닫기
-          </button>
-          <button
-            onClick={onClear}
-            disabled={clearing}
-            className="rounded-full bg-grade-low px-6 py-2 font-semibold text-black disabled:opacity-40"
-          >
-            {clearing ? '해제 중' : '비상정지 해제'}
-          </button>
-        </div>
+    <div
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="estop-title"
+      className="fixed inset-0 z-[60] flex flex-col items-center justify-center gap-8 bg-black/85 px-10 text-center backdrop-blur-sm"
+    >
+      <h2 id="estop-title" className="text-4xl font-semibold text-grade-low">
+        비상정지
+      </h2>
+      <div className="flex max-w-2xl flex-col gap-2">
+        {reasons.map((r) => (
+          <p key={r.key} className="text-xl">
+            {r.detail}
+          </p>
+        ))}
+        <p className="mt-2 text-info">위 이유로 비상정지가 되었습니다. 비상정지를 해제하시겠습니까?</p>
       </div>
+      <button
+        onClick={onClear}
+        disabled={clearing}
+        className="rounded-full bg-grade-low px-8 py-3 text-lg font-semibold text-black disabled:opacity-40"
+      >
+        {clearing ? '해제 중' : '비상정지 해제'}
+      </button>
     </div>
   )
 }
