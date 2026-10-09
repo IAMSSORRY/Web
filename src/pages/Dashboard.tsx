@@ -451,6 +451,43 @@ function GradeCountCard({ stats }: { stats: Stats }) {
   )
 }
 
+// 현재 회차에서 떨어뜨린 사과 수. 화면의 recent 는 최근 50개뿐이라 회차 전체 이력에서 센다.
+// refreshKey 가 바뀔 때(판정, 놓기 결과, 새 회차) 다시 센다.
+function DropCountCard({ refreshKey }: { refreshKey: string }) {
+  const [counts, setCounts] = useState<{ dropped: number; placed: number } | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    api
+      .history()
+      .then((rows) => {
+        if (!alive) return
+        // roll_detected 가 null 이면 아직 놓기 결과가 오지 않은 판정이다.
+        const placed = rows.filter((r) => r.roll_detected !== null)
+        setCounts({ dropped: placed.filter((r) => r.roll_detected).length, placed: placed.length })
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [refreshKey])
+
+  return (
+    <Card title="떨어뜨린 사과" right={<span className="text-[15px] text-info">단위: 개</span>} className="h-[280px]">
+      <div className="flex flex-1 flex-col items-center justify-center gap-3 pt-5">
+        <span className={`text-5xl font-bold tabular-nums ${counts?.dropped ? 'text-grade-low' : ''}`}>
+          {counts?.dropped ?? '—'}
+        </span>
+        <span className="text-info">
+          {counts && counts.placed > 0
+            ? `놓은 사과 ${counts.placed}개 중 ${((counts.dropped / counts.placed) * 100).toFixed(1)}%`
+            : '아직 놓은 사과가 없습니다'}
+        </span>
+      </div>
+    </Card>
+  )
+}
+
 function SummaryCard({ total, cycleTime }: { total: number; cycleTime: number | null }) {
   return (
     <Card title="처리 현황" className="h-[280px]">
@@ -809,6 +846,7 @@ export default function Dashboard() {
           <div className="grid grid-cols-[519fr_302fr_435fr] gap-6">
             <GradeCountCard stats={judge.stats} />
             <SummaryCard total={judge.stats.total} cycleTime={judge.cycleTime} />
+            <DropCountCard refreshKey={`${judge.stats.total}-${judge.motion?.ts ?? ''}-${judge.savedVersion}`} />
           </div>
         </Section>
 
