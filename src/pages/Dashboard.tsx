@@ -191,7 +191,7 @@ function VideoCard({ box }: { box: ActiveBox }) {
             liveBoxes.map((d, i) => (
               <div
                 key={i}
-                className={`absolute border ${d.grade ? gradeBorder[d.grade] : 'border-white/80'}`}
+                className={`absolute border-2 ${d.grade ? gradeBorder[d.grade] : 'border-white/80'}`}
                 style={{
                   left: `${(d.bbox[0] / natural.w) * 100}%`,
                   top: `${(d.bbox[1] / natural.h) * 100}%`,

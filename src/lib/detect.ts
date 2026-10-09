@@ -13,6 +13,15 @@ const PAD = 1
 // 사과는 거의 둥글어서 길쭉한 덩어리(손, 팔 조각)는 뺀다.
 const MAX_ASPECT = 1.6
 
+// 등급 기준(빨강 비율). 백엔드 MOCK 과 같은 형태: 상 >= 0.5, 하 < 0.3, 나머지 중.
+// 실제 판정 기준은 로봇 쪽이 정하므로 화면 표시용 추정치다. 흠(어두운 반점)은 그림자와 구분이 어려워 보지 않는다.
+const HIGH_MIN = 0.5
+const LOW_MAX = 0.3
+
+const NONE = 0
+const RED = 1
+const YELLOW = 2
+
 let canvas: HTMLCanvasElement | null = null
 
 // RGB(0~255) → 색상(0~360), 채도, 명도(0~1)
@@ -33,13 +42,13 @@ function hsv(r: number, g: number, b: number) {
 
 // 빨간 사과와 노란 사과. 청록 트레이, 회색 바닥, 갈색 상자(채도가 낮은 주황)는 빠지게 잡았다.
 // 기준값은 실제 top 카메라 프레임(1280x720)으로 맞췄다.
-function isApple(r: number, g: number, b: number) {
+function appleColor(r: number, g: number, b: number) {
   const { h, s, v } = hsv(r, g, b)
-  if (v < 0.2) return false
+  if (v < 0.2) return NONE
   // 손(피부색)은 색상이 비슷하지만 채도가 낮아서 채도 기준으로 뺀다.
-  const red = (h <= 20 || h >= 340) && s >= 0.55
-  const yellow = h >= 38 && h <= 70 && s >= 0.55 && v >= 0.4
-  return red || yellow
+  if ((h <= 20 || h >= 340) && s >= 0.55) return RED
+  if (h >= 38 && h <= 70 && s >= 0.55 && v >= 0.4) return YELLOW
+  return NONE
 }
 
 export function detectApples(img: HTMLImageElement): Detection[] {
@@ -58,7 +67,7 @@ export function detectApples(img: HTMLImageElement): Detection[] {
 
   const mask = new Uint8Array(w * h)
   for (let i = 0; i < w * h; i++) {
-    if (isApple(data[i * 4], data[i * 4 + 1], data[i * 4 + 2])) mask[i] = 1
+    mask[i] = appleColor(data[i * 4], data[i * 4 + 1], data[i * 4 + 2])
   }
 
   // 붙어 있는 영역끼리 묶어 박스를 만든다(4방향 연결).
@@ -71,7 +80,7 @@ export function detectApples(img: HTMLImageElement): Detection[] {
 
   for (let start = 0; start < w * h; start++) {
     if (!mask[start] || seen[start]) continue
-    let minX = w, minY = h, maxX = 0, maxY = 0, area = 0
+    let minX = w, minY = h, maxX = 0, maxY = 0, area = 0, red = 0
     stack.push(start)
     seen[start] = 1
     while (stack.length) {
@@ -79,6 +88,7 @@ export function detectApples(img: HTMLImageElement): Detection[] {
       const x = p % w
       const y = (p - x) / w
       area++
+      if (mask[p] === RED) red++
       if (x < minX) minX = x
       if (x > maxX) maxX = x
       if (y < minY) minY = y
@@ -103,7 +113,9 @@ export function detectApples(img: HTMLImageElement): Detection[] {
     const y0 = Math.max(0, minY - PAD)
     const x1 = Math.min(w - 1, maxX + PAD)
     const y1 = Math.min(h - 1, maxY + PAD)
-    boxes.push({ bbox: [x0 * scaleX, y0 * scaleY, (x1 - x0 + 1) * scaleX, (y1 - y0 + 1) * scaleY] })
+    const redRatio = red / area
+    const grade = redRatio >= HIGH_MIN ? '상' : redRatio < LOW_MAX ? '하' : '중'
+    boxes.push({ bbox: [x0 * scaleX, y0 * scaleY, (x1 - x0 + 1) * scaleX, (y1 - y0 + 1) * scaleY], grade })
   }
 
   return boxes
