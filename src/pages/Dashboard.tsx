@@ -1063,6 +1063,8 @@ export default function Dashboard() {
 
   // 헤더 연결상태. 화면에 쓰는 고정 카메라만 보고, 문제가 여러 개면 모두 함께 보여준다.
   const topCam = cameras?.cameras.find((c) => c.name === CAM)
+  // 로봇팔 정보가 아예 없으면 확인할 수 없으므로 끊긴 것으로 본다.
+  const armDead = arm ? arm.arms.length === 0 || arm.arms.some((a) => !a.connected || a.responding === false) : false
   const issues: Issue[] | null =
     cameras === undefined
       ? null
@@ -1070,8 +1072,14 @@ export default function Dashboard() {
         ? // 서버가 죽으면 나머지 상태는 알 수 없으므로 이것만 보여준다.
           [{ key: 'server', label: '서버 연결 끊김', level: 'down', detail: '백엔드 서버가 응답하지 않습니다' }]
         : [
-            ...(arm?.ok === false
+            // 로봇팔이 실제로 끊겼거나 응답하지 않을 때만 비상정지로 본다(화면 덮기, 자동 비상정지 대상).
+            // 연결돼 있고 응답도 하는데 ok:false 인 경우(예: CAN 인터페이스 상태값만 DOWN)는 움직이는 로봇을
+            // 멈추면 안 되므로 경고로만 보여준다.
+            ...(arm?.ok === false && armDead
               ? [{ key: 'arm', label: '비상정지', level: 'down' as const, estop: true, detail: `로봇팔: ${polite(arm.message) ?? '로봇팔 상태를 확인하세요'}` }]
+              : []),
+            ...(arm?.ok === false && !armDead
+              ? [{ key: 'arm-check', label: '로봇팔 확인 필요', level: 'warn' as const, detail: `로봇팔은 응답하지만 서버가 이상으로 봅니다: ${polite(arm.message) ?? '상태를 확인하세요'}` }]
               : []),
             // 화면을 덮는 비상정지는 로봇 프로그램이 직접 알려줄 때만 띄운다.
             // 로봇 프로그램에 닿지 못하면 서버의 미션 상태는 오래된 값일 수 있다(로봇 PC 에서 직접 해제한 경우 등).
