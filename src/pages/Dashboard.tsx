@@ -991,8 +991,10 @@ export default function Dashboard() {
         await api.control.stop()
         toast('info', '이번 사과까지만 하고 멈춥니다')
       } else {
+        // park 는 정리가 끝난 뒤에(수 초) 응답하므로 누르는 즉시 먼저 알린다.
+        toast('info', '정리 후 정지를 시작합니다', '사과를 되돌리고 팔을 내린 뒤 멈춥니다. 급하면 비상정지를 누르세요')
         await api.control.park()
-        toast('info', '정리 후 정지합니다', '사과를 되돌리고 팔을 내린 뒤 멈춥니다')
+        toast('success', '정리 후 정지했습니다', '해제하면 이어서 진행합니다')
       }
     } catch (e) {
       const failed = { start: '미션을 시작하지 못했습니다', stop: '정지하지 못했습니다', park: '정리 후 정지를 하지 못했습니다' }[action]
