@@ -90,6 +90,8 @@ export const api = {
   // 최신 회차가 앞에 온다.
   runs: () => request<Run[]>('/runs'),
   resetStats: () => request<{ stats: Stats }>('/stats/reset', { method: 'POST' }),
+  // 비상정지 해제. 서버 API 가 만들어지는 중이라 주소가 바뀌면 여기만 고친다.
+  clearEstop: () => request<unknown>('/mission/estop/clear', { method: 'POST' }),
 }
 
 // 회차를 빼면 전체 회차

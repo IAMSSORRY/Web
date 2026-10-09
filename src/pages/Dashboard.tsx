@@ -290,7 +290,7 @@ function MissionCard({ mission, events }: { mission: MissionState | null; events
         <div className="flex flex-1 flex-col justify-center gap-6 px-5 pb-6">
           <div className="flex flex-col gap-3">
             <div className="flex items-baseline justify-between">
-              <span className="text-3xl font-semibold tabular-nums">
+              <span className="shrink-0 text-3xl font-semibold tabular-nums">
                 {/* 사과 개수 제한이 없는 미션은 전체 개수(apple_count)가 오지 않는다. */}
                 {count ? `사과 ${index} / ${count}` : index ? `사과 ${index}번째` : '사과 —'}
               </span>
@@ -298,7 +298,7 @@ function MissionCard({ mission, events }: { mission: MissionState | null; events
                 {mission.status === 'finished'
                   ? `미션 완료${mission.duration_s !== null ? ` (${mission.duration_s.toFixed(1)}초)` : ''}`
                   : mission.status === 'estop'
-                    ? `비상정지: ${polite(mission.estop_reason) ?? '원인 미상'}`
+                    ? '비상정지'
                     : mission.status === 'stalled'
                       ? `${mission.phase ? `${phaseLabel[mission.phase] ?? mission.phase}에서 ` : ''}멈춤`
                       : mission.phase
@@ -323,6 +323,9 @@ function MissionCard({ mission, events }: { mission: MissionState | null; events
             <Stat label="놓는 높이" value={mission.adaptive ? `${(mission.adaptive.release_h * 100).toFixed(1)}cm` : '—'} />
           </div>
 
+          {mission.status === 'estop' && (
+            <p className="text-sm font-semibold text-grade-low">비상정지 — {polite(mission.estop_reason) ?? '원인 미상'}</p>
+          )}
           {mission.status === 'stalled' && (
             <p className="text-sm font-semibold text-grade-mid">
               로봇 응답 없음{stalledReason(events) ? ` — ${stalledReason(events)}` : ''}
@@ -663,7 +666,8 @@ function LocalArchiveCard({ version }: { version: number }) {
 const TOAST_GRACE_MS = 3000
 
 // 헤더에 함께 보여줄 현재 문제들. down 은 선별이 멈추는 문제(빨강), warn 은 일부만 안 되는 문제(노랑).
-type Issue = { key: string; label: string; level: 'down' | 'warn'; detail: string }
+// estop: 카메라/로봇팔 문제와 로봇 비상정지. 모두 비상정지 화면으로 알린다.
+type Issue = { key: string; label: string; level: 'down' | 'warn'; detail: string; estop?: boolean }
 
 // 문제가 새로 생기거나 해결될 때 문제별로 한 번씩 알린다.
 function useIssueToasts(issues: Issue[] | null) {
@@ -715,6 +719,60 @@ function useMissionFinishedToast(mission: MissionState | null) {
   }, [status])
 }
 
+// 비상정지 화면. 원인(카메라, 로봇팔, 로봇 비상정지)이 하나라도 있으면 화면 전체를 덮는다.
+// 닫으면 원인이 바뀌기 전까지 다시 띄우지 않는다(헤더에는 빨간 상태가 남는다).
+function EstopOverlay({ reasons }: { reasons: { key: string; detail: string }[] }) {
+  const [clearing, setClearing] = useState(false)
+  const [dismissedKey, setDismissedKey] = useState<string | null>(null)
+  const key = reasons.map((r) => `${r.key}:${r.detail}`).join('|')
+
+  if (!reasons.length || dismissedKey === key) return null
+
+  const onClear = async () => {
+    setClearing(true)
+    try {
+      await api.clearEstop()
+      toast('success', '비상정지 해제를 요청했습니다', '원인이 남아 있으면 다시 비상정지됩니다')
+      setDismissedKey(key)
+    } catch (e) {
+      toast('error', '비상정지를 해제하지 못했습니다', (e as Error).message)
+    } finally {
+      setClearing(false)
+    }
+  }
+
+  return (
+    <div role="alertdialog" aria-modal="true" aria-labelledby="estop-title" className="fixed inset-0 z-[60] flex items-center justify-center bg-black/85 backdrop-blur-sm">
+      <div className="flex w-[520px] flex-col gap-6 rounded-xl border border-grade-low bg-main-3 p-8 shadow-card">
+        <div className="flex items-center gap-3">
+          <span className="size-3 rounded-full bg-grade-low" />
+          <h2 id="estop-title" className="text-2xl font-semibold">비상정지</h2>
+        </div>
+        <div className="flex flex-col gap-2">
+          {reasons.map((r) => (
+            <p key={r.key} className="text-lg">
+              {r.detail}
+            </p>
+          ))}
+          <p className="text-info">위 이유로 비상정지가 되었습니다. 비상정지를 해제하시겠습니까?</p>
+        </div>
+        <div className="flex justify-end gap-2">
+          <button onClick={() => setDismissedKey(key)} className="rounded-full px-5 py-2 text-info hover:bg-border">
+            닫기
+          </button>
+          <button
+            onClick={onClear}
+            disabled={clearing}
+            className="rounded-full bg-grade-low px-6 py-2 font-semibold text-black disabled:opacity-40"
+          >
+            {clearing ? '해제 중' : '비상정지 해제'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function Dashboard() {
   const judge = useJudgeStream()
   const cameras = useCameras()
@@ -739,10 +797,10 @@ export default function Dashboard() {
           [{ key: 'server', label: '서버 연결 끊김', level: 'down', detail: '백엔드 서버가 응답하지 않습니다' }]
         : [
             ...(arm?.ok === false
-              ? [{ key: 'arm', label: '로봇팔 문제', level: 'down' as const, detail: polite(arm.message) ?? '로봇팔 상태를 확인하세요' }]
+              ? [{ key: 'arm', label: '비상정지', level: 'down' as const, estop: true, detail: `로봇팔: ${polite(arm.message) ?? '로봇팔 상태를 확인하세요'}` }]
               : []),
             ...(judge.mission?.status === 'estop'
-              ? [{ key: 'estop', label: '비상정지', level: 'down' as const, detail: polite(judge.mission.estop_reason) ?? '로봇이 비상정지했습니다' }]
+              ? [{ key: 'estop', label: '비상정지', level: 'down' as const, estop: true, detail: polite(judge.mission.estop_reason) ?? '로봇이 비상정지했습니다' }]
               : []),
             ...(judge.mission?.status === 'stalled'
               ? [{ key: 'stalled', label: '로봇 응답 없음', level: 'warn' as const, detail: stalledReason(judge.missionEvents) ?? '로봇에서 소식이 끊겼습니다' }]
@@ -751,7 +809,7 @@ export default function Dashboard() {
               ? [{ key: 'frozen', label: '자동 조정 중단', level: 'warn' as const, detail: '떨어뜨림 자동 조정이 멈췄습니다. 점검이 필요합니다' }]
               : []),
             ...(!topCam?.live
-              ? [{ key: 'camera', label: '카메라 문제', level: 'warn' as const, detail: polite(topCam?.error) ?? '고정 카메라에서 영상이 들어오지 않습니다' }]
+              ? [{ key: 'camera', label: '비상정지', level: 'down' as const, estop: true, detail: `카메라: ${polite(topCam?.error) ?? '고정 카메라에서 영상이 들어오지 않습니다'}` }]
               : []),
             ...(!judge.connected
               ? [{ key: 'judge', label: '판정 연결 끊김', level: 'warn' as const, detail: '판정 서버에 다시 연결하는 중입니다' }]
@@ -765,7 +823,7 @@ export default function Dashboard() {
     issues === null
       ? '연결 확인 중'
       : issues.length
-        ? issues.map((i) => i.label).join(' · ')
+        ? [...new Set(issues.map((i) => i.label))].join(' · ')
         : judge.activeBox
           ? '판별 중'
           : '대기 중'
@@ -801,6 +859,7 @@ export default function Dashboard() {
     <>
       <DashboardHeader connection={connection} state={state} detail={detail} />
       <Toaster />
+      <EstopOverlay reasons={issues?.filter((i) => i.estop) ?? []} />
       <div className="flex flex-col gap-10 p-20">
         <Section id="realtime" title="실시간">
           <div className="flex flex-col gap-6">
