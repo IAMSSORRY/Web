@@ -38,6 +38,17 @@ export function useJudgeStream() {
         .then(() => setSavedVersion((v) => v + 1))
         .catch((e) => console.error('[localdb] 판정 저장 실패', e))
 
+    // 현재 회차의 미션 상태와 최근 이벤트로 교체한다.
+    const loadMission = () =>
+      api
+        .mission(MAX_EVENTS)
+        .then((r) => {
+          if (disposed) return
+          setMission(r.state)
+          setMissionEvents([...(r.events ?? [])].reverse())
+        })
+        .catch(() => {})
+
     const onMessage = (msg: JudgeMessage) => {
       switch (msg.type) {
         case 'snapshot':
@@ -48,6 +59,10 @@ export function useJudgeStream() {
           lastJudge = msg.recent.at(-1) ?? null
           // snapshot 의 recent 는 일부라서, 서버가 들고 있는 이력 전체를 받아 저장한다.
           api.history().then(persist).catch(() => persist(msg.recent))
+          // snapshot 은 연결 직후와 새 회차 시작 직후에 온다. 이전 회차의 미션 이벤트를 비우고
+          // 현재 회차 기준으로 다시 받는다(새 회차 직후에는 mission 메시지가 따로 오지 않는다).
+          setMissionEvents([])
+          loadMission()
           break
         case 'judge': {
           const { id, grade, confidence, v_value, threshold, ts, bbox, cam, extra } = msg
@@ -68,12 +83,6 @@ export function useJudgeStream() {
           if (msg.event) {
             const event = msg.event
             setMissionEvents((prev) => [event, ...prev].slice(0, MAX_EVENTS))
-          } else {
-            // 연결 직후: 놓친 이벤트를 REST 로 채운다.
-            api
-              .mission(MAX_EVENTS)
-              .then((r) => setMissionEvents([...(r.events ?? [])].reverse()))
-              .catch(() => {})
           }
           break
         case 'stats':
