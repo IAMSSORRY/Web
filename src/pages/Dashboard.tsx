@@ -757,64 +757,102 @@ function LocalArchiveCard({ version }: { version: number }) {
   )
 }
 
-// 누적 기록을 바탕으로 서버가 AI 조언을 만들어 준다. 몇 초 걸리므로 로딩을 보여준다.
+// 누적 기록을 바탕으로 서버가 AI 조언을 만들어 준다. 한 회차 안의 대화를 채팅처럼 쌓아 보여준다.
+// 회차가 바뀌면 부모가 key 를 바꿔 대화 전체를 비운다.
+type ChatMessage =
+  | { id: number; role: 'user'; text: string }
+  | { id: number; role: 'ai'; advice: Advice }
+  | { id: number; role: 'error'; text: string }
+// 메시지 종류별로 id 를 뺀 모양(Omit 은 유니온을 하나로 합쳐 버려서 나눠서 뺀다)
+type NewChatMessage = ChatMessage extends infer M ? (M extends ChatMessage ? Omit<M, 'id'> : never) : never
+
+const fmtAdviceTime = (t: Advice['generated_at']) => fmtTime(typeof t === 'number' ? t : Date.parse(t) / 1000)
+
 function AdviceCard() {
   const [question, setQuestion] = useState('')
   const [loading, setLoading] = useState(false)
-  const [result, setResult] = useState<Advice | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const nextId = useRef(1)
+  const listRef = useRef<HTMLDivElement>(null)
+
+  // 새 메시지나 로딩 표시가 생기면 맨 아래로 내린다.
+  useEffect(() => {
+    const el = listRef.current
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+  }, [messages, loading])
+
+  const push = (m: NewChatMessage) =>
+    setMessages((prev) => [...prev, { ...m, id: nextId.current++ } as ChatMessage])
 
   const onAsk = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (loading) return
+    const q = question.trim()
+    push({ role: 'user', text: q || '전체 요약을 부탁합니다' })
+    setQuestion('')
     setLoading(true)
-    setError(null)
     try {
-      setResult(await api.advice(question.trim() || undefined))
+      push({ role: 'ai', advice: await api.advice(q || undefined) })
     } catch (err) {
       // 503 이면 서버 detail 문구가 그대로 온다.
-      setError(polite((err as Error).message))
+      push({ role: 'error', text: polite((err as Error).message) })
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <Card title="AI 조언">
-      <div className="flex flex-1 flex-col gap-4 px-5 pb-6 pt-4">
-        <form onSubmit={onAsk} className="flex gap-2">
-          <input
-            value={question}
-            onChange={(e) => setQuestion(e.target.value)}
-            placeholder="궁금한 점 (비워 두면 전체 요약)"
-            className="min-w-0 flex-1 rounded-full border border-border bg-main-1 px-4 py-1.5 text-sm outline-none focus:border-info"
-          />
-          <button
-            type="submit"
-            disabled={loading}
-            className="shrink-0 rounded-full bg-border px-5 py-1.5 text-sm font-semibold hover:bg-divider disabled:opacity-40"
-          >
-            {loading ? '생성 중…' : '조언 받기'}
-          </button>
-        </form>
-
-        {loading && (
-          <div className="flex items-center gap-2 text-sm text-info">
-            <span className="size-4 animate-spin rounded-full border-2 border-info border-t-transparent" />
-            조언을 만드는 중입니다. 몇 초 걸립니다.
-          </div>
+    <Card title="AI 조언" className="h-[420px]">
+      <div ref={listRef} className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-5 pt-4">
+        {messages.length === 0 && !loading && (
+          <p className="m-auto text-center text-sm text-info">
+            궁금한 점을 물어보세요.
+            <br />
+            비워 두고 보내면 지금까지의 기록을 요약해 줍니다.
+          </p>
         )}
-        {error && !loading && <p className="text-sm text-grade-low">{error}</p>}
-        {result && !loading && (
-          <div className="flex flex-col gap-2">
-            <p className="max-h-64 overflow-y-auto whitespace-pre-wrap leading-relaxed">{result.advice}</p>
-            <p className="text-xs text-white/40">
-              {/* generated_at 은 unix 초 또는 ISO 문자열일 수 있다. */}
-              {result.model} · {typeof result.generated_at === 'number' ? fmtTime(result.generated_at) : fmtTime(Date.parse(result.generated_at) / 1000)}
-              {result.cached && ' · 저장된 답변'}
+        {messages.map((m) =>
+          m.role === 'user' ? (
+            <p key={m.id} className="max-w-[85%] self-end whitespace-pre-wrap rounded-2xl rounded-br-sm bg-border px-4 py-2 text-sm">
+              {m.text}
             </p>
+          ) : m.role === 'ai' ? (
+            <div key={m.id} className="flex max-w-[90%] flex-col gap-1 self-start">
+              <p className="whitespace-pre-wrap rounded-2xl rounded-bl-sm bg-main-1 px-4 py-2 leading-relaxed">{m.advice.advice}</p>
+              <span className="px-1 text-xs text-white/40">
+                {m.advice.model} · {fmtAdviceTime(m.advice.generated_at)}
+                {m.advice.cached && ' · 저장된 답변'}
+              </span>
+            </div>
+          ) : (
+            <p key={m.id} className="max-w-[90%] self-start rounded-2xl rounded-bl-sm bg-main-1 px-4 py-2 text-sm text-grade-low">
+              {m.text}
+            </p>
+          ),
+        )}
+        {loading && (
+          <div className="flex items-center gap-2 self-start rounded-2xl rounded-bl-sm bg-main-1 px-4 py-2 text-sm text-info">
+            <span className="size-4 animate-spin rounded-full border-2 border-info border-t-transparent" />
+            조언을 만드는 중입니다
           </div>
         )}
       </div>
+
+      <form onSubmit={onAsk} className="flex gap-2 border-t border-border px-5 py-4">
+        <input
+          value={question}
+          onChange={(e) => setQuestion(e.target.value)}
+          placeholder="궁금한 점 (비워 두면 전체 요약)"
+          className="min-w-0 flex-1 rounded-full border border-border bg-main-1 px-4 py-1.5 text-sm outline-none focus:border-info"
+        />
+        <button
+          type="submit"
+          disabled={loading}
+          className="shrink-0 rounded-full bg-border px-5 py-1.5 text-sm font-semibold hover:bg-divider disabled:opacity-40"
+        >
+          {loading ? '생성 중…' : '보내기'}
+        </button>
+      </form>
     </Card>
   )
 }
