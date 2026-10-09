@@ -1,5 +1,8 @@
-// 백엔드와 같은 출처에서 열린다고 가정하고 상대 경로로만 부른다.
-// 개발 때는 vite.config.ts 의 프록시가 FastAPI 로 넘긴다.
+// VITE_API_BASE 가 없으면 상대 경로로 부른다. 개발 때는 vite.config.ts 의 프록시가 FastAPI 로 넘긴다.
+// Vercel 처럼 백엔드와 출처가 다르면 VITE_API_BASE=https://api.apah.site 로 직접 부른다.
+// 이때 세션 쿠키가 오가야 하므로 서버는 CORS(credentials) 와 SameSite=None; Secure 쿠키가 필요하다.
+export const API_BASE = (import.meta.env.VITE_API_BASE ?? '').replace(/\/$/, '')
+export const apiUrl = (path: string) => `${API_BASE}${path}`
 
 export type Health = { status: string; camera_source: string; cameras: string[] }
 export type Cameras = {
@@ -92,7 +95,7 @@ export type JudgeMessage =
   | { type: 'motion'; approach_speed: number; place_height: number; roll_detected: boolean; ts: number }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, init)
+  const res = await fetch(apiUrl(path), { credentials: 'include', ...init })
   if (!res.ok) {
     const body = await res.json().catch(() => null)
     throw new Error(body?.detail ?? `${res.status} ${res.statusText}`)
@@ -146,9 +149,10 @@ export const api = {
 }
 
 // 회차를 빼면 전체 회차
-export const exportCsvUrl = (run?: number) => (run === undefined ? '/export.csv' : `/export.csv?run=${run}`)
+export const exportCsvUrl = (run?: number) => apiUrl(run === undefined ? '/export.csv' : `/export.csv?run=${run}`)
 
 export function wsUrl(path: string) {
-  const proto = location.protocol === 'https:' ? 'wss' : 'ws'
-  return `${proto}://${location.host}${path}`
+  const base = new URL(API_BASE || location.origin)
+  const proto = base.protocol === 'https:' ? 'wss' : 'ws'
+  return `${proto}://${base.host}${path}`
 }

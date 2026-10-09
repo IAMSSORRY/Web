@@ -70,7 +70,7 @@ export function saveCsv(csv: string, filename: string) {
 
 // 서버 CSV 를 받아 읽기 좋게 바꿔 저장한다. 파일 이름은 서버가 준 것을 쓴다.
 export async function downloadServerCsv(url: string) {
-  const res = await fetch(url)
+  const res = await fetch(url, { credentials: 'include' })
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
   const name = res.headers.get('content-disposition')?.match(/filename="?([^";]+)"?/)?.[1] ?? 'ssorry.csv'
   saveCsv(makeReadable(await res.text()), name)
