@@ -4,14 +4,14 @@ export default function Footer() {
   return (
     <footer className="relative overflow-hidden border-t border-border shadow-[0_0_20px_rgba(0,0,0,0.3)]">
       <img
-        src="/ftBg.png"
+        src="/ftBg.webp"
         alt=""
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 -z-10 h-full w-full object-cover blur-[120px]"
       />
       <div className="relative px-20 py-16 flex flex-col gap-10">
         <div className="flex items-start justify-between gap-4">
-          <img src="/icon.png" alt="logo" className="h-16 shrink-0" />
+          <img src="/icon.webp" alt="logo" className="h-16 shrink-0" />
           <a
             href="https://github.com/IAMSSORRY"
             target="_blank"

@@ -11,7 +11,7 @@ export default function ImageCard({
   alt = '',
   fallback = 
     <div className="flex flex-col items-center justify-center gap-6">
-      <img src="warn.svg" alt="" />
+      <img src="/warn.svg" alt="" />
       <p className='text-border text-xl font-medium'>이미지를 불러올 수 없습니다</p>
     </div>,
 }: ImageCardProps) {
