@@ -8,7 +8,8 @@ export type Cameras = {
 }
 
 export type Grade = '상' | '중'
-export type Stats = { 상: number; 중: number; total: number }
+// 하 등급은 아직 서버가 판정하지 않아 키가 없을 수 있다.
+export type Stats = { 상: number; 중: number; 하?: number; total: number }
 
 export type JudgeRecord = {
   id: number

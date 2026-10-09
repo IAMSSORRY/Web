@@ -535,6 +535,7 @@ function RunsCard({ refreshKey }: { refreshKey: string }) {
                 <th className="font-medium">종료</th>
                 <th className="font-medium">상</th>
                 <th className="font-medium">중</th>
+                <th className="font-medium">하</th>
                 <th className="font-medium">전체</th>
                 <th />
               </tr>
@@ -547,6 +548,7 @@ function RunsCard({ refreshKey }: { refreshKey: string }) {
                   <td>{r.ended_at ? dateTimeFmt.format(r.ended_at * 1000) : <span className="text-grade-high">진행 중</span>}</td>
                   <td className="text-grade-high">{r.stats.상}</td>
                   <td className="text-grade-mid">{r.stats.중}</td>
+                  <td className="text-grade-low">{r.stats.하 ?? 0}</td>
                   <td>{r.stats.total}</td>
                   <td className="text-right">
                     <button onClick={() => downloadRunCsv(r.id)} className="text-sm text-info underline-offset-4 hover:underline">
