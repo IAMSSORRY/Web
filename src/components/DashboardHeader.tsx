@@ -27,12 +27,12 @@ type Props = {
 
 export default function DashboardHeader({ connection, state, detail, onEstop, estopping }: Props) {
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 h-header px-4 md:px-20 flex items-center justify-between gap-3 bg-main-2/50 border-b border-border shadow-[0_0_20px_rgba(0,0,0,0.3)] backdrop-blur-xl">
+    <header className="fixed top-0 left-0 right-0 z-50 h-header px-4 lg:px-20 flex items-center justify-between gap-3 bg-main-2/50 border-b border-border shadow-[0_0_20px_rgba(0,0,0,0.3)] backdrop-blur-xl">
       <Link to={paths.landing}>
-        <img src="/logo.webp" alt="logo" className="h-6 md:h-8" />
+        <img src="/logo.webp" alt="logo" className="h-6 lg:h-8" />
       </Link>
 
-      <nav className="absolute left-1/2 hidden -translate-x-1/2 gap-10 tracking-[0.04em] md:flex">
+      <nav className="absolute left-1/2 hidden -translate-x-1/2 gap-10 tracking-[0.04em] lg:flex">
         {nav.map(({ href, label }) => (
           <a key={href} href={href} className="hover:text-info">
             {label}
@@ -40,20 +40,20 @@ export default function DashboardHeader({ connection, state, detail, onEstop, es
         ))}
       </nav>
 
-      <div className="flex min-w-0 items-center gap-2 md:gap-3">
-      <div title={detail} className="flex h-8 min-w-0 items-center gap-2 rounded-full bg-border px-3 md:px-5">
+      <div className="flex min-w-0 items-center gap-2 lg:gap-3">
+      <div title={detail} className="flex h-8 min-w-0 items-center gap-2 rounded-full bg-border px-3 lg:px-5">
         {/* 휴대폰에서는 라벨을 빼고 점과 상태만 보여준다 */}
-        <span className="hidden font-semibold md:inline">연결상태</span>
+        <span className="hidden font-semibold lg:inline">연결상태</span>
         <span className={`size-2.5 rounded-full transition-colors ${dotColor[connection]}`} />
-        <span className="hidden h-5 w-px bg-info md:inline" />
-        <span className="hidden font-semibold md:inline">상태</span>
-        <span className={`truncate text-sm md:text-base ${connection === 'ok' ? 'text-info' : 'text-white'}`}>{state}</span>
+        <span className="hidden h-5 w-px bg-info lg:inline" />
+        <span className="hidden font-semibold lg:inline">상태</span>
+        <span className={`truncate text-sm lg:text-base ${connection === 'ok' ? 'text-info' : 'text-white'}`}>{state}</span>
       </div>
       {/* 비상 상황용이라 확인 없이 바로 보낸다. */}
       <button
         onClick={onEstop}
         disabled={estopping}
-        className="h-8 shrink-0 rounded-full bg-grade-low px-4 text-sm font-semibold md:px-5 md:text-base text-black hover:brightness-110 disabled:opacity-60"
+        className="h-8 shrink-0 rounded-full bg-grade-low px-4 text-sm font-semibold lg:px-5 lg:text-base text-black hover:brightness-110 disabled:opacity-60"
       >
         {estopping ? '정지 중' : '비상정지'}
       </button>

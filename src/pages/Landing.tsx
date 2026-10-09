@@ -94,17 +94,17 @@ export default function Landing() {
   return (
     <div ref={root} className="flex flex-col gap-10">
       {/* hero */}
-      <div className="flex flex-col-reverse gap-8 md:flex-row md:justify-between md:items-center px-4 py-10 md:px-20 md:py-16">
+      <div className="flex flex-col-reverse gap-8 lg:flex-row lg:justify-between lg:items-center px-4 py-10 lg:px-20 lg:py-16">
         <div data-hero-text className="flex flex-col gap-8">
           <div className="flex flex-col gap-4">
-            <h1 className="text-2xl md:text-4xl font-semibold">
+            <h1 className="text-2xl lg:text-4xl font-semibold">
               암쏘사과는 판정 근거를 제시하는<br />사과 선별 시스템입니다.
             </h1>
             <p className="text-info">등급만 내놓지 않고, 왜 그 등급인지를 함께 보여줍니다.</p>
           </div>
           <Link
             to={paths.dashboard}
-            className="self-start bg-white text-black text-base md:text-lg font-semibold px-6 md:px-8 py-3 rounded-full shadow-[0_0_20px_rgba(255,255,255,0.5)]"
+            className="self-start bg-white text-black text-base lg:text-lg font-semibold px-6 lg:px-8 py-3 rounded-full shadow-[0_0_20px_rgba(255,255,255,0.5)]"
           >
             바로가기 →
           </Link>
@@ -118,7 +118,7 @@ export default function Landing() {
         const imageFirst = i % 2 === 0
         const card = (
           // 휴대폰에서는 섹션마다 이미지를 위에 둔다
-          <div data-card className="order-first md:order-none">
+          <div data-card className="order-first lg:order-none">
             <ImageCard src={f.image} alt={f.alt} />
           </div>
         )
@@ -126,11 +126,11 @@ export default function Landing() {
           <div
             key={f.title}
             data-feature
-            className={`flex flex-col gap-6 px-4 py-8 md:flex-row md:items-center md:px-20 ${imageFirst ? 'bg-main-2 md:gap-24' : 'md:justify-between'}`}
+            className={`flex flex-col gap-6 px-4 py-8 lg:flex-row lg:items-center lg:px-20 ${imageFirst ? 'bg-main-2 lg:gap-24' : 'lg:justify-between'}`}
           >
             {imageFirst && card}
             <div data-text className="flex flex-col gap-4">
-              <h1 className="text-2xl md:text-4xl font-semibold">{f.title}</h1>
+              <h1 className="text-2xl lg:text-4xl font-semibold">{f.title}</h1>
               <p className="text-info">{f.lead}</p>
               <p className="text-info">
                 {f.body.map((line, j) => (
