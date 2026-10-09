@@ -18,6 +18,8 @@ export type JudgeRecord = {
   roll_detected: boolean | null
 }
 
+export type Run = { id: number; started_at: number; ended_at: number | null; stats: Stats }
+
 export type StatsResponse = { stats: Stats; cycle_time: number | null; recent: JudgeRecord[] }
 
 export type JudgeMessage =
@@ -41,8 +43,13 @@ export const api = {
   health: () => request<Health>('/health'),
   cameras: () => request<Cameras>('/cameras'),
   history: () => request<JudgeRecord[]>('/history'),
+  // 최신 회차가 앞에 온다.
+  runs: () => request<Run[]>('/runs'),
   resetStats: () => request<{ stats: Stats }>('/stats/reset', { method: 'POST' }),
 }
+
+// 회차를 빼면 전체 회차
+export const exportCsvUrl = (run?: number) => (run === undefined ? '/export.csv' : `/export.csv?run=${run}`)
 
 export function wsUrl(path: string) {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws'

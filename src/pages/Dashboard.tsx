@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import DashboardHeader from '../components/DashboardHeader'
 import { useCameraStream } from '../hooks/useCameraStream'
 import { useJudgeStream, type LiveJudge } from '../hooks/useJudgeStream'
-import { api, type Cameras, type Grade } from '../lib/api'
+import { api, exportCsvUrl, type Cameras, type Grade, type Run } from '../lib/api'
 import { countJudges, loadJudges, saveJudges } from '../lib/localdb'
 
 const POLL_MS = 2000
@@ -298,6 +298,72 @@ async function downloadCsv() {
   URL.revokeObjectURL(url)
 }
 
+const dateTimeFmt = new Intl.DateTimeFormat('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })
+
+// 서버(SQLite)에 남아 있는 회차 목록. 새 회차를 시작해도 이전 회차는 지워지지 않는다.
+function RunsCard({ refreshKey }: { refreshKey: string }) {
+  const [runs, setRuns] = useState<Run[] | null>(null)
+  const [error, setError] = useState(false)
+
+  useEffect(() => {
+    api
+      .runs()
+      .then((r) => (setRuns(r), setError(false)))
+      .catch(() => setError(true))
+  }, [refreshKey])
+
+  return (
+    <Card
+      title="회차 기록"
+      right={
+        <a
+          href={exportCsvUrl()}
+          download
+          className="ml-auto rounded-full bg-border px-5 py-1.5 text-sm font-semibold hover:bg-divider"
+        >
+          전체 CSV
+        </a>
+      }
+    >
+      <div className="max-h-96 overflow-y-auto px-5 pb-5 pt-4">
+        {error && <p className="py-8 text-center text-info">회차 기록을 불러오지 못했습니다</p>}
+        {runs && (
+          <table className="w-full">
+            <thead className="sticky top-0 bg-main-3 text-left text-info">
+              <tr>
+                <th className="py-2 font-medium">회차</th>
+                <th className="font-medium">시작</th>
+                <th className="font-medium">종료</th>
+                <th className="font-medium">상</th>
+                <th className="font-medium">중</th>
+                <th className="font-medium">전체</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody className="tabular-nums">
+              {runs.map((r) => (
+                <tr key={r.id} className="border-t border-border">
+                  <td className="py-2">{r.id}</td>
+                  <td>{dateTimeFmt.format(r.started_at * 1000)}</td>
+                  <td>{r.ended_at ? dateTimeFmt.format(r.ended_at * 1000) : <span className="text-grade-high">진행 중</span>}</td>
+                  <td className="text-grade-high">{r.stats.상}</td>
+                  <td className="text-grade-mid">{r.stats.중}</td>
+                  <td>{r.stats.total}</td>
+                  <td className="text-right">
+                    <a href={exportCsvUrl(r.id)} download className="text-sm text-info underline-offset-4 hover:underline">
+                      CSV
+                    </a>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </Card>
+  )
+}
+
 function LocalArchiveCard({ version }: { version: number }) {
   const [count, setCount] = useState<number | null>(null)
   const [error, setError] = useState(false)
@@ -309,12 +375,12 @@ function LocalArchiveCard({ version }: { version: number }) {
   }, [version])
 
   return (
-    <Card title="브라우저 저장 기록">
+    <Card title="브라우저 백업">
       <div className="flex items-center justify-between gap-6 px-5 pb-6 pt-4">
         <p className="text-info">
           {error
             ? '이 브라우저에서는 기록을 저장할 수 없습니다 (시크릿 창이거나 저장소가 막혀 있습니다)'
-            : `이 브라우저에 판정 ${count ?? 0}개가 저장되어 있습니다. 통계를 초기화하거나 서버가 재시작되어도 남습니다.`}
+            : `서버에 접속할 수 없을 때를 대비해 이 브라우저에도 판정 ${count ?? 0}개를 보관하고 있습니다.`}
         </p>
         <button
           onClick={() => downloadCsv()}
@@ -334,7 +400,7 @@ export default function Dashboard() {
   const [resetting, setResetting] = useState(false)
   const [confirming, setConfirming] = useState(false)
   const [resetError, setResetError] = useState<string | null>(null)
-
+  const [runsKey, setRunsKey] = useState(0)
 
   const latest = judge.recent[0]
   const average = judge.recent.length
@@ -348,12 +414,16 @@ export default function Dashboard() {
     setResetting(true)
     setResetError(null)
     try {
-      // 서버 이력을 브라우저 DB 에 먼저 백업하고, 성공했을 때만 초기화한다.
-      await saveJudges(await api.history())
+      // 서버가 이전 회차를 SQLite 에 남기므로 브라우저 백업은 보조용이다. 실패해도 진행한다.
+      await api
+        .history()
+        .then(saveJudges)
+        .catch((e) => console.error('[localdb] 백업 실패', e))
       await api.resetStats()
       // 성공하면 서버가 모든 /ws/judge 에 새 snapshot 을 보내므로 화면은 그걸로 바뀐다.
+      setRunsKey((k) => k + 1)
     } catch (e) {
-      setResetError(`초기화하지 않았습니다: ${(e as Error).message}`)
+      setResetError(`새 회차를 시작하지 못했습니다: ${(e as Error).message}`)
     } finally {
       setResetting(false)
       setConfirming(false)
@@ -380,7 +450,7 @@ export default function Dashboard() {
               {resetError && <span className="text-grade-low">{resetError}</span>}
               {confirming ? (
                 <>
-                  <span className="text-info">기록을 브라우저에 백업한 뒤 초기화합니다</span>
+                  <span className="text-info">현재 회차를 마감합니다. 기록은 서버에 남습니다</span>
                   <button
                     onClick={() => setConfirming(false)}
                     disabled={resetting}
@@ -391,9 +461,9 @@ export default function Dashboard() {
                   <button
                     onClick={onReset}
                     disabled={resetting}
-                    className="rounded-full bg-grade-low px-5 py-1.5 font-semibold text-black disabled:opacity-40"
+                    className="rounded-full bg-white px-5 py-1.5 font-semibold text-black disabled:opacity-40"
                   >
-                    {resetting ? '백업 중' : '초기화'}
+                    {resetting ? '처리 중' : '시작'}
                   </button>
                 </>
               ) : (
@@ -401,7 +471,7 @@ export default function Dashboard() {
                   onClick={() => setConfirming(true)}
                   className="rounded-full bg-border px-5 py-1.5 font-semibold hover:bg-divider"
                 >
-                  통계 초기화
+                  새 회차 시작
                 </button>
               )}
             </div>
@@ -416,6 +486,8 @@ export default function Dashboard() {
         <Section id="analysis" title="분석">
           <div className="flex flex-col gap-6">
             <HistoryCard recent={judge.recent} />
+            {/* 판정 수가 바뀔 때마다 회차별 집계를 다시 받는다. */}
+            <RunsCard refreshKey={`${runsKey}-${judge.stats.total}`} />
             <LocalArchiveCard version={judge.savedVersion} />
           </div>
         </Section>
