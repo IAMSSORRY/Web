@@ -21,7 +21,7 @@ export default defineConfig(({ mode }) => {
       host: true,
       // 백엔드는 /api 접두사 없이 경로를 쓴다. 배포 때는 빌드 결과를 서버가 직접 서빙한다.
       proxy: Object.fromEntries(
-        ['/session', '/health', '/cameras', '/stats', '/history', '/runs', '/export.csv', '/arm', '/ws'].map((p) => [
+        ['/session', '/health', '/cameras', '/stats', '/history', '/runs', '/export.csv', '/arm', '/mission', '/ws'].map((p) => [
           p,
           { target, ws: p === '/ws', changeOrigin: true },
         ]),

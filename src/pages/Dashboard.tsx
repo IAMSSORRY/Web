@@ -3,7 +3,7 @@ import DashboardHeader, { type Connection } from '../components/DashboardHeader'
 import Toaster from '../components/Toaster'
 import { useCameraStream } from '../hooks/useCameraStream'
 import { useJudgeStream, type LiveJudge } from '../hooks/useJudgeStream'
-import { api, exportCsvUrl, type ArmStatus, type Cameras, type Grade, type Run } from '../lib/api'
+import { api, exportCsvUrl, type ArmStatus, type Cameras, type MissionEvent, type MissionPhase, type MissionState, type Grade, type Run } from '../lib/api'
 import { polite } from '../lib/polite'
 import { toast } from '../lib/toast'
 import { countJudges, loadJudges, saveJudges } from '../lib/localdb'
@@ -23,6 +23,8 @@ const gradeBorder: Record<Grade, string> = {
 const timeFmt = new Intl.DateTimeFormat('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
 const fmtTime = (ts: number) => timeFmt.format(ts * 1000)
 const pct = (n: number) => `${(n * 100).toFixed(1)}%`
+// 비율(0~1)은 소수 둘째 자리, 그보다 큰 값(예: 0~255)은 정수로
+const num = (n: number) => (Math.abs(n) <= 1 ? n.toFixed(2) : String(Math.round(n)))
 
 // /cameras 응답으로 카메라 목록과 카메라별 프레임 수신 여부를 본다.
 // undefined: 아직 첫 응답 전, null: 서버 응답 없음
@@ -189,20 +191,175 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
   )
 }
 
+// 등급 규칙: 빨강 비율 >= 기준 이고 흠 비율 <= 기준 이면 상, 아니면 중
+function evidenceText(j: LiveJudge) {
+  if (j.v_value === null || j.threshold === null) return null
+  const parts = [`빨강 ${num(j.v_value)} ${j.v_value >= j.threshold ? '≥' : '<'} ${num(j.threshold)}`]
+  if (j.extra) {
+    parts.push(`흠 ${num(j.extra.dark_ratio)} ${j.extra.dark_ratio <= j.extra.dark_max ? '≤' : '>'} ${num(j.extra.dark_max)}`)
+  }
+  return `${parts.join(', ')} → ${j.grade}`
+}
+
+function Measured({ value, limit }: { value: number; limit: number }) {
+  return (
+    <>
+      {num(value)}
+      <span className="text-base font-medium text-info"> / {num(limit)}</span>
+    </>
+  )
+}
+
 function AppleInfoCard({ judge }: { judge: LiveJudge | undefined }) {
+  const evidence = judge && evidenceText(judge)
+
   return (
     <Card title="해당 사과 정보" className="h-[330px]">
       {judge ? (
-        <div className="flex flex-1 flex-col justify-center gap-5 px-[29px]">
+        <div className="flex flex-1 flex-col justify-center gap-4 px-[29px]">
           <Row label="등급" value={<span className={gradeText[judge.grade]}>{judge.grade}</span>} />
-          {/* 근거 수치의 출처가 확정되지 않아 null 이면 숨긴다. */}
-          {judge.v_value !== null && <Row label="명도값" value={judge.v_value} />}
-          {judge.threshold !== null && <Row label="적용 임계값" value={judge.threshold} />}
+          {/* 근거 수치가 없으면(null) 숨긴다. 값 옆의 작은 숫자는 판정 기준이다. */}
+          {judge.v_value !== null && judge.threshold !== null && (
+            <Row label="빨강 비율" value={<Measured value={judge.v_value} limit={judge.threshold} />} />
+          )}
+          {judge.extra && <Row label="흠 비율" value={<Measured value={judge.extra.dark_ratio} limit={judge.extra.dark_max} />} />}
           <Row label="신뢰도" value={pct(judge.confidence)} />
+          {evidence && <p className="text-sm text-info">{evidence}</p>}
         </div>
       ) : (
         <p className="flex flex-1 items-center justify-center text-info">판정 대기 중</p>
       )}
+    </Card>
+  )
+}
+
+const phaseLabel: Record<MissionPhase, string> = {
+  pick: '집는 중',
+  inspect: '검사 중',
+  place: '놓는 중',
+  home: '복귀 중',
+}
+
+const statusLabel: Record<MissionState['status'], { text: string; className: string }> = {
+  idle: { text: '대기 중', className: 'bg-border text-info' },
+  running: { text: '진행 중', className: 'bg-grade-high text-black' },
+  finished: { text: '완료', className: 'bg-white text-black' },
+  estop: { text: '비상정지', className: 'bg-grade-low text-black' },
+}
+
+function Stat({ label, value, tone = '' }: { label: string; value: React.ReactNode; tone?: string }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="text-sm text-info">{label}</span>
+      <span className={`text-2xl font-semibold tabular-nums ${tone}`}>{value}</span>
+    </div>
+  )
+}
+
+function MissionCard({ mission }: { mission: MissionState | null }) {
+  const status = mission ? statusLabel[mission.status] : null
+  const index = mission?.apple_index ?? 0
+  const count = mission?.apple_count ?? 0
+
+  return (
+    <Card
+      title="미션 진행"
+      right={
+        <div className="ml-auto flex items-center gap-2 text-sm">
+          {mission?.sim && <span className="rounded-full border border-border px-3 py-0.5 text-info">시뮬레이션</span>}
+          {status && <span className={`rounded-full px-3 py-0.5 font-semibold ${status.className}`}>{status.text}</span>}
+        </div>
+      }
+      className="h-[330px]"
+    >
+      {!mission ? (
+        <p className="flex flex-1 items-center justify-center text-info">미션 정보를 기다리는 중</p>
+      ) : (
+        <div className="flex flex-1 flex-col justify-center gap-6 px-5 pb-6">
+          <div className="flex flex-col gap-3">
+            <div className="flex items-baseline justify-between">
+              <span className="text-3xl font-semibold tabular-nums">
+                {count ? `사과 ${index} / ${count}` : '사과 —'}
+              </span>
+              <span className="text-info">
+                {mission.status === 'finished'
+                  ? `미션 완료${mission.duration_s !== null ? ` (${mission.duration_s.toFixed(1)}초)` : ''}`
+                  : mission.status === 'estop'
+                    ? `비상정지: ${polite(mission.estop_reason) ?? '원인 미상'}`
+                    : mission.phase
+                      ? phaseLabel[mission.phase]
+                      : '대기 중'}
+              </span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-border">
+              <div className="h-full bg-white transition-[width] duration-500" style={{ width: count ? `${(index / count) * 100}%` : 0 }} />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-5 gap-4">
+            <Stat label="파지 성공" value={mission.picks_ok} />
+            <Stat label="파지 실패" value={mission.picks_failed} tone={mission.picks_failed ? 'text-grade-low' : ''} />
+            <Stat label="건너뜀" value={mission.skipped} tone={mission.skipped ? 'text-grade-mid' : ''} />
+            {/* 굴림 적응: 굴림이 나면 하강 속도와 놓는 높이를 낮춘다. */}
+            <Stat label="하강 속도" value={mission.adaptive ? `×${mission.adaptive.scale.toFixed(2)}` : '—'} />
+            <Stat label="놓는 높이" value={mission.adaptive ? `${(mission.adaptive.release_h * 100).toFixed(1)}cm` : '—'} />
+          </div>
+
+          {mission.adaptive?.frozen && (
+            <p className="text-sm font-semibold text-grade-mid">자동 조정 중단 — 점검이 필요합니다</p>
+          )}
+        </div>
+      )}
+    </Card>
+  )
+}
+
+const f = (e: MissionEvent, key: string) => e[key] as number | string | boolean | null | undefined
+
+// 이벤트를 화면 문구로. 모르는 종류는 이름 그대로 보여준다.
+function describeEvent(e: MissionEvent): { text: string; tone?: string } {
+  switch (e.event) {
+    case 'apple':
+      return { text: `사과 ${f(e, 'index')} / ${f(e, 'total')} 시작` }
+    case 'phase':
+      return { text: phaseLabel[f(e, 'phase') as MissionPhase] ?? `단계: ${f(e, 'phase')}` }
+    case 'pick': {
+      const attempt = Number(f(e, 'attempt') ?? 0) + 1
+      return f(e, 'ok')
+        ? { text: `파지 성공 (폭 ${f(e, 'width_mm')}mm)` }
+        : { text: `파지 실패 (${attempt}번째 시도)`, tone: 'text-grade-low' }
+    }
+    case 'skip':
+      return { text: '사과 건너뜀', tone: 'text-grade-mid' }
+    case 'roll':
+      return { text: '굴림 감지', tone: 'text-grade-mid' }
+    case 'estop':
+      return { text: `비상정지${f(e, 'reason') ? `: ${polite(String(f(e, 'reason')))}` : ''}`, tone: 'text-grade-low' }
+    case 'finished':
+    case 'finish':
+      return { text: '미션 완료', tone: 'text-grade-high' }
+    case 'start':
+      return { text: '미션 시작' }
+    default:
+      return { text: e.event }
+  }
+}
+
+function MissionEventsCard({ events }: { events: MissionEvent[] }) {
+  return (
+    <Card title="로봇 이벤트" className="h-[330px]">
+      <ul className="flex-1 overflow-y-auto px-5 pb-5 pt-4">
+        {events.map((e, i) => {
+          const { text, tone = '' } = describeEvent(e)
+          return (
+            <li key={`${e.ts}-${i}`} className="flex gap-4 border-t border-border py-2 first:border-t-0">
+              <span className="shrink-0 tabular-nums text-white/50">{fmtTime(e.ts)}</span>
+              <span className={tone}>{text}</span>
+            </li>
+          )
+        })}
+        {events.length === 0 && <li className="py-8 text-center text-info">아직 이벤트가 없습니다</li>}
+      </ul>
     </Card>
   )
 }
@@ -285,7 +442,8 @@ function HistoryCard({ recent }: { recent: LiveJudge[] }) {
               <th className="font-medium">시각</th>
               <th className="font-medium">등급</th>
               <th className="font-medium">신뢰도</th>
-              <th className="font-medium">명도값 / 임계값</th>
+              <th className="font-medium">빨강 / 기준</th>
+              <th className="font-medium">흠 / 기준</th>
               <th className="font-medium">굴림</th>
             </tr>
           </thead>
@@ -296,7 +454,8 @@ function HistoryCard({ recent }: { recent: LiveJudge[] }) {
                 <td>{fmtTime(r.ts)}</td>
                 <td className={`font-semibold ${gradeText[r.grade]}`}>{r.grade}</td>
                 <td>{pct(r.confidence)}</td>
-                <td>{r.v_value !== null && r.threshold !== null ? `${r.v_value} / ${r.threshold}` : '—'}</td>
+                <td>{r.v_value !== null && r.threshold !== null ? `${num(r.v_value)} / ${num(r.threshold)}` : '—'}</td>
+                <td>{r.extra ? `${num(r.extra.dark_ratio)} / ${num(r.extra.dark_max)}` : '—'}</td>
                 <td><RollBadge value={r.roll_detected} /></td>
               </tr>
             ))}
@@ -310,9 +469,9 @@ function HistoryCard({ recent }: { recent: LiveJudge[] }) {
 
 async function downloadCsv() {
   const rows = await loadJudges()
-  const header = ['id', 'time', 'grade', 'confidence', 'v_value', 'threshold', 'roll_detected', 'cam']
+  const header = ['id', 'time', 'grade', 'confidence', 'v_value', 'threshold', 'dark_ratio', 'dark_max', 'roll_detected', 'cam']
   const lines = rows.map((r) =>
-    [r.id, new Date(r.ts * 1000).toISOString(), r.grade, r.confidence, r.v_value ?? '', r.threshold ?? '', r.roll_detected ?? '', r.cam ?? ''].join(','),
+    [r.id, new Date(r.ts * 1000).toISOString(), r.grade, r.confidence, r.v_value ?? '', r.threshold ?? '', r.extra?.dark_ratio ?? '', r.extra?.dark_max ?? '', r.roll_detected ?? '', r.cam ?? ''].join(','),
   )
   // 엑셀에서 한글이 깨지지 않게 BOM 을 붙인다.
   const blob = new Blob(['\uFEFF' + [header.join(','), ...lines].join('\n')], { type: 'text/csv;charset=utf-8' })
@@ -460,6 +619,22 @@ function useRollToast(motion: ReturnType<typeof useJudgeStream>['motion']) {
   }, [motion])
 }
 
+function useMissionFinishedToast(mission: MissionState | null) {
+  const prev = useRef<MissionState['status'] | null>(null)
+  const status = mission?.status ?? null
+
+  useEffect(() => {
+    const before = prev.current
+    prev.current = status
+    if (before && before !== 'finished' && status === 'finished') {
+      const d = mission?.duration_s
+      toast('success', '미션을 완료했습니다', d !== null && d !== undefined ? `소요 시간 ${d.toFixed(1)}초` : undefined)
+    }
+    // 상태가 바뀔 때만 본다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status])
+}
+
 export default function Dashboard() {
   const judge = useJudgeStream()
   const cameras = useCameras()
@@ -486,6 +661,12 @@ export default function Dashboard() {
             ...(arm?.ok === false
               ? [{ key: 'arm', label: '로봇팔 문제', level: 'down' as const, detail: polite(arm.message) ?? '로봇팔 상태를 확인하세요' }]
               : []),
+            ...(judge.mission?.status === 'estop'
+              ? [{ key: 'estop', label: '비상정지', level: 'down' as const, detail: polite(judge.mission.estop_reason) ?? '로봇이 비상정지했습니다' }]
+              : []),
+            ...(judge.mission?.adaptive?.frozen
+              ? [{ key: 'frozen', label: '자동 조정 중단', level: 'warn' as const, detail: '굴림 자동 조정이 멈췄습니다. 점검이 필요합니다' }]
+              : []),
             ...(!topCam?.live
               ? [{ key: 'camera', label: '카메라 문제', level: 'warn' as const, detail: polite(topCam?.error) ?? '고정 카메라에서 영상이 들어오지 않습니다' }]
               : []),
@@ -509,6 +690,7 @@ export default function Dashboard() {
 
   useIssueToasts(issues)
   useRollToast(judge.motion)
+  useMissionFinishedToast(judge.mission)
 
   const onReset = async () => {
     setResetting(true)
@@ -538,10 +720,16 @@ export default function Dashboard() {
       <Toaster />
       <div className="flex flex-col gap-10 p-20">
         <Section id="realtime" title="실시간">
+          <div className="flex flex-col gap-6">
           <div className="grid grid-cols-[628fr_302fr_302fr] gap-6">
             <VideoCard box={judge.activeBox} />
             <AppleInfoCard judge={latest} />
             <ConfidenceCard average={average} />
+          </div>
+          <div className="grid grid-cols-2 gap-6">
+            <MissionCard mission={judge.mission} />
+            <MissionEventsCard events={judge.missionEvents} />
+          </div>
           </div>
         </Section>
 

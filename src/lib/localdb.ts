@@ -43,8 +43,8 @@ export async function saveJudges(records: (JudgeRecord & { cam?: string })[]) {
   const tx = db.transaction(STORE, 'readwrite')
   const store = tx.objectStore(STORE)
   for (const r of records) {
-    const { id, grade, confidence, v_value, threshold, ts, roll_detected, cam } = r
-    store.put({ key: keyOf(r), id, grade, confidence, v_value, threshold, ts, roll_detected, cam })
+    const { id, grade, confidence, v_value, threshold, ts, roll_detected, cam, extra } = r
+    store.put({ key: keyOf(r), id, grade, confidence, v_value, threshold, ts, roll_detected, cam, extra })
   }
   await done(tx)
 }

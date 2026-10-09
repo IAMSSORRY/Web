@@ -19,7 +19,33 @@ export type JudgeRecord = {
   threshold: number | null
   ts: number
   roll_detected: boolean | null
+  // 흠(어두운 영역) 비율. 서버가 보낼 때만 있다. dark_ratio <= dark_max 여야 상이다.
+  extra?: { dark_ratio: number; dark_max: number } | null
 }
+
+export type MissionStatus = 'idle' | 'running' | 'finished' | 'estop'
+export type MissionPhase = 'pick' | 'inspect' | 'place' | 'home'
+
+export type MissionState = {
+  status: MissionStatus
+  sim: boolean | null
+  apple_count: number | null
+  apple_index: number | null
+  phase: MissionPhase | null
+  picks_ok: number
+  picks_failed: number
+  skipped: number
+  // scale: 하강 속도 배율, release_h: 놓는 높이(m), frozen: 자동 조정이 멈춤
+  adaptive: { scale: number; release_h: number; frozen: boolean; down_streak: number } | null
+  estop_reason: string | null
+  started_at: number | null
+  ended_at: number | null
+  duration_s: number | null
+  updated_at: number | null
+}
+
+// 이벤트 종류마다 필드가 다르다 (apple: index/total, phase: phase, pick: ok/attempt/width_mm …)
+export type MissionEvent = { event: string; ts: number; [field: string]: unknown }
 
 // ok 가 null 이면 서버가 로봇팔을 감시하지 않는 상태(source: "none")다.
 export type ArmStatus = {
@@ -38,6 +64,8 @@ export type JudgeMessage =
   | ({ type: 'snapshot' } & StatsResponse)
   | ({ type: 'judge'; bbox: [number, number, number, number]; cam: string } & Omit<JudgeRecord, 'roll_detected'>)
   | { type: 'stats'; stats: Stats; cycle_time: number | null }
+  // 연결 직후에는 event 가 null 이고 현재 상태만 온다.
+  | { type: 'mission'; event: MissionEvent | null; state: MissionState }
   | { type: 'motion'; approach_speed: number; place_height: number; roll_detected: boolean; ts: number }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -55,6 +83,7 @@ export const api = {
   health: () => request<Health>('/health'),
   cameras: () => request<Cameras>('/cameras'),
   arm: () => request<ArmStatus>('/arm'),
+  mission: (events = 0) => request<{ state: MissionState; events?: MissionEvent[] }>(`/mission?events=${events}`),
   history: () => request<JudgeRecord[]>('/history'),
   // 최신 회차가 앞에 온다.
   runs: () => request<Run[]>('/runs'),

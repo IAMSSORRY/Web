@@ -23,6 +23,8 @@
     color: white;
   }
   html {
+    /* 스크롤바 같은 브라우저 기본 UI 도 어두운 테마로 */
+    color-scheme: dark;
     /* 헤더 메뉴의 앵커 이동 시 고정 헤더에 가리지 않게 */
     scroll-padding-top: calc(var(--spacing-header) + 1rem);
     scroll-behavior: smooth;
