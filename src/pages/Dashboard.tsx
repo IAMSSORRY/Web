@@ -456,6 +456,8 @@ function describeEvent(e: MissionEvent): { text: string; tone?: string } | null 
       const reason = f(e, 'reason')
       return { text: `로봇 응답 없음${reason ? ` (${polite(String(reason))})` : ''}`, tone: 'text-grade-mid' }
     }
+    case 'resume':
+      return { text: `비상정지 해제 — 사과 ${f(e, 'index') ?? ''}번째부터 이어서`, tone: 'text-grade-high' }
     case 'estop':
       return { text: `비상정지${f(e, 'reason') ? `: ${polite(String(f(e, 'reason')))}` : ''}`, tone: 'text-grade-low' }
     default:
@@ -829,7 +831,8 @@ function useAutoEstop(abnormal: Issue[], active: boolean, onTrigger: (reason: st
 
 // 비상정지 화면. 원인(카메라, 로봇팔, 로봇 비상정지)이 하나라도 있으면 화면 전체를 덮는다.
 // 해제 요청이 성공하면 원인이 바뀌기 전까지 다시 띄우지 않는다.
-function EstopOverlay({ reasons }: { reasons: { key: string; detail: string }[] }) {
+// robotReachable: 로봇 미션 프로그램에 닿는지. 꺼져 있으면 원격으로 해제할 수 없다.
+function EstopOverlay({ reasons, robotReachable }: { reasons: { key: string; detail: string }[]; robotReachable: boolean }) {
   const [clearing, setClearing] = useState(false)
   // 해제하는 순간 모터 전원이 잠깐 빠져 팔이 처질 수 있어서 한 번 더 묻는다.
   const [confirming, setConfirming] = useState(false)
@@ -872,6 +875,13 @@ function EstopOverlay({ reasons }: { reasons: { key: string; detail: string }[] 
         ))}
         <p className="mt-2 text-info">위 이유로 비상정지가 되었습니다. 비상정지를 해제하시겠습니까?</p>
       </div>
+      {!robotReachable && (
+        <p className="max-w-2xl text-grade-mid">
+          로봇 미션 프로그램에 연결할 수 없어 원격으로 해제할 수 없습니다. 로봇 PC에서 팔을 받친 상태로{' '}
+          <code className="rounded bg-main-3 px-1.5 py-0.5">python3 mission.py --resume</code> 을 실행한 뒤{' '}
+          <code className="rounded bg-main-3 px-1.5 py-0.5">python3 mission.py --serve</code> 로 다시 켜 주세요.
+        </p>
+      )}
       {confirming ? (
         <div className="flex flex-col items-center gap-4">
           <p className="text-lg font-semibold">팔을 받치고 있나요? 해제하면 팔이 잠깐 처질 수 있습니다.</p>
@@ -889,7 +899,11 @@ function EstopOverlay({ reasons }: { reasons: { key: string; detail: string }[] 
           </div>
         </div>
       ) : (
-        <button onClick={() => setConfirming(true)} className="rounded-full bg-grade-low px-8 py-3 text-lg font-semibold text-white">
+        <button
+          onClick={() => setConfirming(true)}
+          disabled={!robotReachable}
+          className="rounded-full bg-grade-low px-8 py-3 text-lg font-semibold text-white disabled:opacity-40"
+        >
           비상정지 해제
         </button>
       )}
@@ -1032,7 +1046,7 @@ export default function Dashboard() {
     <>
       <DashboardHeader connection={connection} state={state} detail={detail} onEstop={() => sendEstop()} emphasizeEstop={robotState === 'stopping'} />
       <Toaster />
-      <EstopOverlay reasons={issues?.filter((i) => i.estop) ?? []} />
+      <EstopOverlay reasons={issues?.filter((i) => i.estop) ?? []} robotReachable={control !== null} />
       <div className="flex flex-col gap-8 p-4 lg:gap-10 lg:p-20">
         <Section id="realtime" title="실시간">
           <div className="flex flex-col gap-4 lg:gap-6">

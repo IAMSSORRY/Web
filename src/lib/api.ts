@@ -134,7 +134,14 @@ export const api = {
     // 정리 후 정지: 쥔 사과를 되돌리고 팔을 낮게 내린 뒤 비상정지한다. 수 초 걸린다.
     park: () => control('/control/park'),
     // 비상정지(또는 오류 정지) 해제 → 멈춘 사과부터 이어서 한다. 모터를 다시 켜느라 몇 초 걸린다.
-    resume: () => control('/control/resume'),
+    // 로봇이 해제에 실패하면 ok 없이 state 가 그대로 estopped/error 로 올 수 있어 상태로도 판단한다.
+    resume: async () => {
+      const data = (await control('/control/resume')) as Partial<ControlStatus>
+      if (data.state === 'estopped' || data.state === 'error') {
+        throw new Error(data.error ?? '로봇이 아직 비상정지 상태입니다')
+      }
+      return data
+    },
   },
 }
 
