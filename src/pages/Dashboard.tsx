@@ -78,8 +78,8 @@ function useArm() {
 function Section({ id, title, right, children }: { id: string; title: string; right?: React.ReactNode; children: React.ReactNode }) {
   return (
     <section id={id} className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-[32px] font-semibold">{title}</h2>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-2xl font-semibold md:text-[32px]">{title}</h2>
         {right}
       </div>
       {children}
@@ -128,7 +128,7 @@ function VideoCard({ box }: { box: ActiveBox }) {
   const hasFrame = camera.frameUrl !== null
 
   return (
-    <Card className="h-[330px] [container-type:size]">
+    <Card className="h-[240px] [container-type:size] md:h-[330px]">
       {hasFrame && (
         // 카드를 꽉 채우도록(cover) 프레임 비율 그대로 키우고 넘치는 쪽은 잘라낸다.
         // 프레임과 같은 비율의 박스 안에서 그리므로 bbox 는 퍼센트로 그대로 얹힌다.
@@ -217,7 +217,7 @@ function AppleInfoCard({ judge }: { judge: LiveJudge | undefined }) {
   const evidence = judge && evidenceText(judge)
 
   return (
-    <Card title="해당 사과 정보" className="h-[330px]">
+    <Card title="해당 사과 정보" className="min-h-[280px] md:h-[330px]">
       {judge ? (
         <div className="flex flex-1 flex-col justify-center gap-4 px-[29px]">
           <Row label="등급" value={<span className={gradeText[judge.grade]}>{judge.grade}</span>} />
@@ -324,15 +324,15 @@ function MissionCard({
             ))}
         </div>
       }
-      className="h-[330px]"
+      className="min-h-[330px] md:h-[330px]"
     >
       {!mission ? (
         <p className="flex flex-1 items-center justify-center text-info">미션 정보를 기다리는 중</p>
       ) : (
-        <div className="flex flex-1 flex-col justify-center gap-6 px-5 pb-6">
+        <div className="flex flex-1 flex-col justify-center gap-6 px-5 pb-6 pt-4 md:pt-0">
           <div className="flex flex-col gap-3">
             <div className="flex items-baseline justify-between">
-              <span className="shrink-0 text-3xl font-semibold tabular-nums">
+              <span className="shrink-0 text-2xl font-semibold tabular-nums md:text-3xl">
                 {/* 사과 개수 제한이 없는 미션은 전체 개수(apple_count)가 오지 않는다. */}
                 {count ? `사과 ${index} / ${count}` : index ? `사과 ${index}번째` : '사과 —'}
               </span>
@@ -356,7 +356,7 @@ function MissionCard({
             )}
           </div>
 
-          <div className="grid grid-cols-5 gap-4">
+          <div className="grid grid-cols-3 gap-4 md:grid-cols-5">
             <Stat label="파지 성공" value={mission.picks_ok} />
             <Stat label="파지 실패" value={mission.picks_failed} tone={mission.picks_failed ? 'text-grade-low' : ''} />
             <Stat label="건너뜀" value={mission.skipped} tone={mission.skipped ? 'text-grade-mid' : ''} />
@@ -492,10 +492,10 @@ function GradeCountCard({ stats }: { stats: Stats }) {
 
   return (
     <Card title="등급별 사과 개수" right={<span className="text-[15px] text-info">단위: 개</span>} className="h-[280px]">
-      <div className="flex flex-1 items-center justify-center gap-12 pt-5">
+      <div className="flex flex-1 items-center justify-center gap-6 pt-5 md:gap-12">
         {grades.map((g) => (
-          <div key={g} className="flex w-30 flex-col items-center gap-8">
-            <span className="text-[32px] font-semibold text-info">{g}</span>
+          <div key={g} className="flex w-20 flex-col items-center gap-6 md:w-30 md:gap-8">
+            <span className="text-2xl font-semibold text-info md:text-[32px]">{g}</span>
             <span className={`text-5xl font-bold tabular-nums ${gradeText[g]}`}>{stats[g]}</span>
           </div>
         ))}
@@ -560,8 +560,8 @@ function RollBadge({ value }: { value: boolean | null }) {
 function HistoryCard({ recent }: { recent: LiveJudge[] }) {
   return (
     <Card title="판정 이력">
-      <div className="max-h-96 overflow-y-auto px-5 pb-5 pt-4">
-        <table className="w-full">
+      <div className="max-h-96 overflow-auto px-5 pb-5 pt-4">
+        <table className="w-full min-w-[560px] whitespace-nowrap md:whitespace-normal">
           <thead className="sticky top-0 bg-main-3 text-left text-info">
             <tr>
               <th className="py-2 font-medium">#</th>
@@ -633,10 +633,10 @@ function RunsCard({ refreshKey }: { refreshKey: string }) {
         </button>
       }
     >
-      <div className="max-h-96 overflow-y-auto px-5 pb-5 pt-4">
+      <div className="max-h-96 overflow-auto px-5 pb-5 pt-4">
         {error && <p className="py-8 text-center text-info">회차 기록을 불러오지 못했습니다</p>}
         {runs && (
-          <table className="w-full">
+          <table className="w-full min-w-[560px] whitespace-nowrap md:whitespace-normal">
             <thead className="sticky top-0 bg-main-3 text-left text-info">
               <tr>
                 <th className="py-2 font-medium">회차</th>
@@ -818,14 +818,14 @@ function EstopOverlay({ reasons }: { reasons: { key: string; detail: string }[] 
       role="alertdialog"
       aria-modal="true"
       aria-labelledby="estop-title"
-      className="fixed inset-0 z-[60] flex flex-col items-center justify-center gap-8 bg-black/85 px-10 text-center backdrop-blur-sm"
+      className="fixed inset-0 z-[60] flex flex-col items-center justify-center gap-8 bg-black/85 px-6 text-center backdrop-blur-sm md:px-10"
     >
-      <h2 id="estop-title" className="text-4xl font-semibold text-grade-low">
+      <h2 id="estop-title" className="text-3xl font-semibold text-grade-low md:text-4xl">
         비상정지
       </h2>
       <div className="flex max-w-2xl flex-col gap-2">
         {reasons.map((r) => (
-          <p key={r.key} className="text-xl">
+          <p key={r.key} className="text-lg md:text-xl">
             {r.detail}
           </p>
         ))}
@@ -966,15 +966,15 @@ export default function Dashboard() {
       <DashboardHeader connection={connection} state={state} detail={detail} onEstop={() => sendEstop()} estopping={estopping} />
       <Toaster />
       <EstopOverlay reasons={issues?.filter((i) => i.estop) ?? []} />
-      <div className="flex flex-col gap-10 p-20">
+      <div className="flex flex-col gap-8 p-4 md:gap-10 md:p-20">
         <Section id="realtime" title="실시간">
-          <div className="flex flex-col gap-6">
-          <div className="grid grid-cols-[628fr_302fr_302fr] gap-6">
+          <div className="flex flex-col gap-4 md:gap-6">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-[628fr_302fr_302fr] md:gap-6">
             <VideoCard box={judge.activeBox} />
             <AppleInfoCard judge={latest} />
             <ConfidenceCard average={average} />
           </div>
-          <div className="grid grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-6">
             <MissionCard mission={judge.mission} events={judge.missionEvents} pending={pending} onControl={onControl} />
             <MissionEventsCard events={judge.missionEvents} />
           </div>
@@ -985,11 +985,11 @@ export default function Dashboard() {
           id="stats"
           title="통계"
           right={
-            <div className="flex items-center gap-2 text-sm">
+            <div className="flex flex-wrap items-center gap-2 text-sm">
               {resetError && <span className="text-grade-low">{resetError}</span>}
               {confirming ? (
                 <>
-                  <span className="text-info">현재 회차를 마감합니다. 기록은 서버에 남습니다</span>
+                  <span className="hidden text-info md:inline">현재 회차를 마감합니다. 기록은 서버에 남습니다</span>
                   <button
                     onClick={() => setConfirming(false)}
                     disabled={resetting}
@@ -1016,7 +1016,7 @@ export default function Dashboard() {
             </div>
           }
         >
-          <div className="grid grid-cols-[519fr_302fr_435fr] gap-6">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-[519fr_302fr_435fr] md:gap-6">
             <GradeCountCard stats={judge.stats} />
             <SummaryCard total={judge.stats.total} cycleTime={judge.cycleTime} />
             <DropCountCard refreshKey={`${judge.stats.total}-${judge.motion?.ts ?? ''}-${judge.savedVersion}`} />
@@ -1024,7 +1024,7 @@ export default function Dashboard() {
         </Section>
 
         <Section id="analysis" title="분석">
-          <div className="flex flex-col gap-6">
+          <div className="flex flex-col gap-4 md:gap-6">
             <HistoryCard recent={judge.recent} />
             {/* 판정 수가 바뀔 때마다 회차별 집계를 다시 받는다. */}
             <RunsCard refreshKey={`${runsKey}-${judge.stats.total}`} />

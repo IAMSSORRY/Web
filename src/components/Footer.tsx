@@ -9,9 +9,9 @@ export default function Footer() {
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 -z-10 h-full w-full object-cover blur-[120px]"
       />
-      <div className="relative px-20 py-16 flex flex-col gap-10">
+      <div className="relative px-4 py-10 md:px-20 md:py-16 flex flex-col gap-8 md:gap-10">
         <div className="flex items-start justify-between gap-4">
-          <img src="/icon.webp" alt="logo" className="h-16 shrink-0" />
+          <img src="/icon.webp" alt="logo" className="h-12 md:h-16 shrink-0" />
           <a
             href="https://github.com/IAMSSORRY"
             target="_blank"
@@ -19,13 +19,13 @@ export default function Footer() {
             aria-label="GitHub"
             className="shrink-0"
           >
-            <FaGithub className="size-16" />
+            <FaGithub className="size-12 md:size-16" />
           </a>
         </div>
 
         <div className="flex flex-col gap-2">
-          <h3 className="font-semibold text-xl">암쏘사과 - SSORRY</h3>
-          <h3 className="font-medium text-xl">판정 근거를 제시하는 사과 선별 시스템</h3>
+          <h3 className="font-semibold text-lg md:text-xl">암쏘사과 - SSORRY</h3>
+          <h3 className="font-medium text-lg md:text-xl">판정 근거를 제시하는 사과 선별 시스템</h3>
         </div>
 
         <div className="flex flex-col gap-2">

@@ -18,7 +18,7 @@ export default function ImageCard({
   const [failed, setFailed] = useState(false)
 
   return (
-    <div className="w-160 h-80 bg-main-3 rounded-xl flex flex-col items-center justify-center overflow-hidden border border-border">
+    <div className="w-full aspect-[2/1] md:w-160 md:h-80 md:aspect-auto bg-main-3 rounded-xl flex flex-col items-center justify-center overflow-hidden border border-border">
       {src && !failed ? (
         <img
           src={src}

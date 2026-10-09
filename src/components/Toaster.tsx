@@ -11,7 +11,7 @@ export default function Toaster() {
   const toasts = useToasts()
 
   return (
-    <div aria-live="polite" className="fixed bottom-6 right-6 z-50 flex w-96 flex-col gap-3">
+    <div aria-live="polite" className="fixed inset-x-4 bottom-4 z-50 flex flex-col gap-3 md:inset-x-auto md:bottom-6 md:right-6 md:w-96">
       {toasts.map((t) => (
         <div
           key={t.id}
