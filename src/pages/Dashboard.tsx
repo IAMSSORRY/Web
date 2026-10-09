@@ -762,7 +762,7 @@ function EstopOverlay({ reasons }: { reasons: { key: string; detail: string }[] 
       <button
         onClick={onClear}
         disabled={clearing}
-        className="rounded-full bg-grade-low px-8 py-3 text-lg font-semibold text-black disabled:opacity-40"
+        className="rounded-full bg-grade-low px-8 py-3 text-lg font-semibold text-white disabled:opacity-40"
       >
         {clearing ? '해제 중' : '비상정지 해제'}
       </button>
