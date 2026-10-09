@@ -675,8 +675,8 @@ export default function Dashboard() {
             ...(arm?.ok === false
               ? [{ key: 'arm', label: '로봇팔 문제', level: 'down' as const, detail: polite(arm.message) ?? '로봇팔 상태를 확인하세요' }]
               : []),
-            ...(judge.mission?.status === 'estop'
-              ? [{ key: 'estop', label: '비상정지', level: 'down' as const, detail: polite(judge.mission.estop_reason) ?? '로봇이 비상정지했습니다' }]
+            ...(judge.rawMission?.status === 'estop'
+              ? [{ key: 'estop', label: '비상정지', level: 'down' as const, detail: polite(judge.rawMission.estop_reason) ?? '로봇이 비상정지했습니다' }]
               : []),
             ...(judge.mission?.adaptive?.frozen
               ? [{ key: 'frozen', label: '자동 조정 중단', level: 'warn' as const, detail: '굴림 자동 조정이 멈췄습니다. 점검이 필요합니다' }]

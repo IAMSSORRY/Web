@@ -21,6 +21,8 @@ export function useJudgeStream() {
   const [mission, setMission] = useState<MissionState | null>(null)
   // 최신 이벤트가 앞에 온다.
   const [missionEvents, setMissionEvents] = useState<MissionEvent[]>([])
+  // 현재 회차가 시작된 시각. 이보다 먼저 시작된 미션은 이전 회차 것으로 본다.
+  const [runStartedAt, setRunStartedAt] = useState<number | null>(null)
   // 브라우저 DB 에 저장된 판정 수. 저장이 끝날 때마다 바뀐다.
   const [savedVersion, setSavedVersion] = useState(0)
   const [activeBox, setActiveBox] = useState<{ bbox: Bbox; grade: JudgeRecord['grade']; cam: string } | null>(null)
@@ -40,15 +42,15 @@ export function useJudgeStream() {
 
     // 현재 회차의 미션 상태와 최근 이벤트로 교체한다.
     const loadMission = () =>
-      api
-        .mission(MAX_EVENTS)
-        .then((r) => {
+      Promise.all([api.mission(MAX_EVENTS), api.runs().catch(() => [])])
+        .then(([r, runs]) => {
           if (disposed) return
+          const runStart = runs.find((run) => run.ended_at === null)?.started_at ?? null
+          setRunStartedAt(runStart)
           setMission(r.state)
-          // 서버 이벤트는 회차 단위라 이전 미션 것도 섞여 온다. 현재 미션이 시작된 뒤의 것만 보여준다.
-          const since = r.state.started_at
-          const events = (r.events ?? []).filter((e) => since === null || e.ts >= since)
-          setMissionEvents(events.reverse())
+          // 서버 이벤트는 회차 단위라 이전 미션 것도 섞여 온다. 현재 미션과 현재 회차가 시작된 뒤의 것만 보여준다.
+          const since = Math.max(r.state.started_at ?? 0, runStart ?? 0)
+          setMissionEvents((r.events ?? []).filter((e) => e.ts >= since).reverse())
         })
         .catch(() => {})
 
@@ -132,5 +134,26 @@ export function useJudgeStream() {
     }
   }, [])
 
-  return { connected, stats, cycleTime, recent, motion, activeBox, savedVersion, mission, missionEvents }
+  // 새 회차를 시작하면 미션 진행도 처음부터 보여준다. 서버는 로봇이 진행 중이라고 보면 이전 미션 상태를
+  // 그대로 들고 있으므로, 현재 회차보다 먼저 시작된 미션은 대기 상태로 바꿔 보여준다.
+  // 비상정지는 안전 문제라 rawMission 으로 따로 본다.
+  const missionIsPrevious =
+    mission !== null && runStartedAt !== null && mission.started_at !== null && mission.started_at < runStartedAt
+  const currentMission: MissionState | null =
+    mission && missionIsPrevious
+      ? { ...mission, status: 'idle', apple_index: null, apple_count: null, phase: null, picks_ok: 0, picks_failed: 0, skipped: 0, started_at: null, duration_s: null }
+      : mission
+
+  return {
+    connected,
+    stats,
+    cycleTime,
+    recent,
+    motion,
+    activeBox,
+    savedVersion,
+    mission: currentMission,
+    rawMission: mission,
+    missionEvents,
+  }
 }
