@@ -17,14 +17,13 @@ export default defineConfig(({ mode }) => {
     ],
     server: {
       host: true,
-      proxy: {
-        '/api': {
-          target,
-          ws: true,
-          changeOrigin: true,
-          rewrite: (path) => path.replace(/^\/api/, ''),
-        },
-      },
+      // 백엔드는 /api 접두사 없이 경로를 쓴다. 배포 때는 빌드 결과를 서버가 직접 서빙한다.
+      proxy: Object.fromEntries(
+        ['/session', '/health', '/publish', '/last', '/topics', '/stats', '/history', '/ws'].map((p) => [
+          p,
+          { target, ws: p === '/ws', changeOrigin: true },
+        ]),
+      ),
     },
   }
 })

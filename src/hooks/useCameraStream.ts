@@ -21,12 +21,8 @@ export function useCameraStream() {
       count = 0
     }, 1000)
 
-    const connect = async () => {
-      try {
-        await api.session()
-      } catch {
-        // 서버가 아직 안 떴으면 잠시 뒤 다시 시도한다.
-      }
+    const connect = async (needSession: boolean) => {
+      if (needSession) await api.session().catch(() => {})
       if (disposed) return
 
       ws = new WebSocket(wsUrl('/ws/camera'))
@@ -46,14 +42,14 @@ export function useCameraStream() {
         setFrameUrl(url)
         count++
       }
-      ws.onclose = () => {
+      ws.onclose = (ev) => {
         setStatus('closed')
-        // 4401(세션 없음)도 connect 에서 /session 을 먼저 불러 쿠키를 다시 받는다.
-        if (!disposed) retry = setTimeout(connect, 1000)
+        // 4401: 세션 없음 → 쿠키부터 다시 받고 붙는다.
+        if (!disposed) retry = setTimeout(() => connect(ev.code === 4401), 1000)
       }
     }
 
-    connect()
+    connect(true)
 
     return () => {
       disposed = true
