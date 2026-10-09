@@ -7,7 +7,12 @@
   --color-main-3: #242424;
   --color-border: #343434;
   --color-info: #CCCCCC;
-  --spacing-header: 4.5rem;
+  --color-divider: #3D3D3D;
+  --color-grade-high: #33EE33;
+  --color-grade-mid: #EEEE33;
+  --color-grade-low: #EE3333;
+  --spacing-header: 4rem;
+  --shadow-card: 0 0 40px 5px rgba(0, 0, 0, 0.2);
   --font-sans: "Pretendard Variable", Pretendard, system-ui, sans-serif;
 }
 
@@ -16,5 +21,10 @@
     font-family: var(--font-sans);
     background-color: var(--color-main-1);
     color: white;
+  }
+  html {
+    /* 헤더 메뉴의 앵커 이동 시 고정 헤더에 가리지 않게 */
+    scroll-padding-top: calc(var(--spacing-header) + 1rem);
+    scroll-behavior: smooth;
   }
 }
