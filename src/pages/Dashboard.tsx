@@ -172,6 +172,27 @@ function VideoCard({ box }: { box: ActiveBox }) {
               if (w !== natural.w || h !== natural.h) setNatural({ w, h })
             }}
           />
+          {/* 비전이 프레임마다 보내는 실시간 박스. 판정 박스보다 얇게 그린다. */}
+          {!camera.down &&
+            camera.detections.map((d, i) => (
+              <div
+                key={i}
+                className={`absolute border ${d.grade ? gradeBorder[d.grade] : 'border-white/80'}`}
+                style={{
+                  left: `${(d.bbox[0] / natural.w) * 100}%`,
+                  top: `${(d.bbox[1] / natural.h) * 100}%`,
+                  width: `${(d.bbox[2] / natural.w) * 100}%`,
+                  height: `${(d.bbox[3] / natural.h) * 100}%`,
+                }}
+              >
+                {(d.grade || d.score !== undefined) && (
+                  <span className="absolute -top-5 left-0 whitespace-nowrap rounded bg-black/60 px-1 text-xs">
+                    {d.grade}
+                    {d.score !== undefined && ` ${Math.round(d.score * 100)}%`}
+                  </span>
+                )}
+              </div>
+            ))}
           {shownBox && (
             <div
               className={`absolute border-2 ${gradeBorder[shownBox.grade]}`}
