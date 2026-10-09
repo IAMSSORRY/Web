@@ -3,7 +3,7 @@ import DashboardHeader, { type Connection } from '../components/DashboardHeader'
 import Toaster from '../components/Toaster'
 import { useCameraStream } from '../hooks/useCameraStream'
 import { useJudgeStream, type LiveJudge } from '../hooks/useJudgeStream'
-import { api, exportCsvUrl, type ArmStatus, type Cameras, type MissionEvent, type MissionPhase, type MissionState, type RobotState, type ControlStatus, type Grade, type Run, type Stats } from '../lib/api'
+import { api, exportCsvUrl, type Advice, type ArmStatus, type Cameras, type MissionEvent, type MissionPhase, type MissionState, type RobotState, type ControlStatus, type Grade, type Run, type Stats } from '../lib/api'
 import { downloadServerCsv, formatTs, saveCsv } from '../lib/csv'
 import { polite } from '../lib/polite'
 import { toast } from '../lib/toast'
@@ -757,6 +757,68 @@ function LocalArchiveCard({ version }: { version: number }) {
   )
 }
 
+// 누적 기록을 바탕으로 서버가 AI 조언을 만들어 준다. 몇 초 걸리므로 로딩을 보여준다.
+function AdviceCard() {
+  const [question, setQuestion] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [result, setResult] = useState<Advice | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const onAsk = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    setError(null)
+    try {
+      setResult(await api.advice(question.trim() || undefined))
+    } catch (err) {
+      // 503 이면 서버 detail 문구가 그대로 온다.
+      setError(polite((err as Error).message))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <Card title="AI 조언">
+      <div className="flex flex-1 flex-col gap-4 px-5 pb-6 pt-4">
+        <form onSubmit={onAsk} className="flex gap-2">
+          <input
+            value={question}
+            onChange={(e) => setQuestion(e.target.value)}
+            placeholder="궁금한 점 (비워 두면 전체 요약)"
+            className="min-w-0 flex-1 rounded-full border border-border bg-main-1 px-4 py-1.5 text-sm outline-none focus:border-info"
+          />
+          <button
+            type="submit"
+            disabled={loading}
+            className="shrink-0 rounded-full bg-border px-5 py-1.5 text-sm font-semibold hover:bg-divider disabled:opacity-40"
+          >
+            {loading ? '생성 중…' : '조언 받기'}
+          </button>
+        </form>
+
+        {loading && (
+          <div className="flex items-center gap-2 text-sm text-info">
+            <span className="size-4 animate-spin rounded-full border-2 border-info border-t-transparent" />
+            조언을 만드는 중입니다. 몇 초 걸립니다.
+          </div>
+        )}
+        {error && !loading && <p className="text-sm text-grade-low">{error}</p>}
+        {result && !loading && (
+          <div className="flex flex-col gap-2">
+            <p className="max-h-64 overflow-y-auto whitespace-pre-wrap leading-relaxed">{result.advice}</p>
+            <p className="text-xs text-white/40">
+              {/* generated_at 은 unix 초 또는 ISO 문자열일 수 있다. */}
+              {result.model} · {typeof result.generated_at === 'number' ? fmtTime(result.generated_at) : fmtTime(Date.parse(result.generated_at) / 1000)}
+              {result.cached && ' · 저장된 답변'}
+            </p>
+          </div>
+        )}
+      </div>
+    </Card>
+  )
+}
+
 // 페이지를 막 연 뒤에는 웹소켓이 붙는 중이라 상태가 잠깐 흔들린다. 그동안은 알리지 않는다.
 const TOAST_GRACE_MS = 3000
 
@@ -1134,7 +1196,10 @@ export default function Dashboard() {
             <HistoryCard recent={judge.recent} />
             {/* 판정 수가 바뀔 때마다 회차별 집계를 다시 받는다. */}
             <RunsCard refreshKey={`${runsKey}-${judge.stats.total}`} />
-            <LocalArchiveCard version={judge.savedVersion} />
+            <div className="grid gap-4 lg:grid-cols-2 lg:gap-6">
+              <LocalArchiveCard version={judge.savedVersion} />
+              <AdviceCard />
+            </div>
           </div>
         </Section>
       </div>

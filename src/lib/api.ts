@@ -82,6 +82,8 @@ export type ControlStatus = {
   ts: number
 }
 
+export type Advice = { advice: string; question: string | null; model: string; generated_at: number | string; cached: boolean }
+
 export type Run = { id: number; started_at: number; ended_at: number | null; stats: Stats }
 
 export type StatsResponse = { stats: Stats; cycle_time: number | null; recent: JudgeRecord[] }
@@ -121,6 +123,13 @@ export const api = {
   arm: () => request<ArmStatus>('/arm'),
   mission: (events = 0) => request<{ state: MissionState; events?: MissionEvent[] }>(`/mission?events=${events}`),
   history: () => request<JudgeRecord[]>('/history'),
+  // AI 조언. 몇 초 걸린다. question 을 빼면 서버가 정한 기본 질문으로 답한다.
+  advice: (question?: string) =>
+    request<Advice>('/advice', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(question ? { question } : {}),
+    }),
   // 최신 회차가 앞에 온다.
   runs: () => request<Run[]>('/runs'),
   resetStats: () => request<{ stats: Stats }>('/stats/reset', { method: 'POST' }),
