@@ -21,9 +21,11 @@ type Props = {
   state: string
   // 마우스를 올리면 보이는 원인 설명
   detail?: string
+  onEstop: () => void
+  estopping: boolean
 }
 
-export default function DashboardHeader({ connection, state, detail }: Props) {
+export default function DashboardHeader({ connection, state, detail, onEstop, estopping }: Props) {
   return (
     <header className="fixed top-0 left-0 right-0 z-50 h-header px-20 flex items-center justify-between bg-main-2/50 border-b border-border shadow-[0_0_20px_rgba(0,0,0,0.3)] backdrop-blur-xl">
       <Link to={paths.landing}>
@@ -38,12 +40,22 @@ export default function DashboardHeader({ connection, state, detail }: Props) {
         ))}
       </nav>
 
+      <div className="flex items-center gap-3">
       <div title={detail} className="flex h-8 items-center gap-2 rounded-full bg-border px-5">
         <span className="font-semibold">연결상태</span>
         <span className={`size-2.5 rounded-full transition-colors ${dotColor[connection]}`} />
         <span className="h-5 w-px bg-info" />
         <span className="font-semibold">상태</span>
         <span className={connection === 'ok' ? 'text-info' : 'text-white'}>{state}</span>
+      </div>
+      {/* 비상 상황용이라 확인 없이 바로 보낸다. */}
+      <button
+        onClick={onEstop}
+        disabled={estopping}
+        className="h-8 rounded-full bg-grade-low px-5 font-semibold text-black hover:brightness-110 disabled:opacity-60"
+      >
+        {estopping ? '정지 중' : '비상정지'}
+      </button>
       </div>
     </header>
   )

@@ -267,7 +267,20 @@ function stalledReason(events: MissionEvent[]) {
   return typeof reason === 'string' ? polite(reason) : undefined
 }
 
-function MissionCard({ mission, events }: { mission: MissionState | null; events: MissionEvent[] }) {
+type ControlAction = 'start' | 'stop'
+
+function MissionCard({
+  mission,
+  events,
+  pending,
+  onControl,
+}: {
+  mission: MissionState | null
+  events: MissionEvent[]
+  pending: ControlAction | null
+  onControl: (action: ControlAction) => void
+}) {
+  const running = mission?.status === 'running' || mission?.status === 'stalled'
   // 처음 보는 status 가 와도 깨지지 않게 배지는 생략한다.
   const status = mission ? (statusLabel[mission.status] ?? null) : null
   const index = mission?.apple_index ?? 0
@@ -280,6 +293,26 @@ function MissionCard({ mission, events }: { mission: MissionState | null; events
         <div className="ml-auto flex items-center gap-2 text-sm">
           {mission?.sim && <span className="rounded-full border border-border px-3 py-0.5 text-info">시뮬레이션</span>}
           {status && <span className={`rounded-full px-3 py-0.5 font-semibold ${status.className}`}>{status.text}</span>}
+          {/* 비상정지 중에는 해제(이어하기)로 다시 움직인다. */}
+          {mission?.status !== 'estop' &&
+            (running ? (
+              <button
+                onClick={() => onControl('stop')}
+                disabled={pending !== null}
+                title="지금 사과까지만 하고 멈춥니다"
+                className="rounded-full bg-border px-4 py-0.5 font-semibold hover:bg-divider disabled:opacity-40"
+              >
+                {pending === 'stop' ? '정지 요청 중' : '정지'}
+              </button>
+            ) : (
+              <button
+                onClick={() => onControl('start')}
+                disabled={pending !== null}
+                className="rounded-full bg-white px-4 py-0.5 font-semibold text-black disabled:opacity-40"
+              >
+                {pending === 'start' ? '시작 중' : '시작'}
+              </button>
+            ))}
         </div>
       }
       className="h-[330px]"
@@ -719,6 +752,34 @@ function useMissionFinishedToast(mission: MissionState | null) {
   }, [status])
 }
 
+// 로봇이 미션을 하는 중에 이상이 이 시간 넘게 이어지면 웹에서 비상정지를 보낸다.
+const AUTO_ESTOP_MS = 10_000
+
+// active 동안 abnormal 이 AUTO_ESTOP_MS 넘게 이어지면 한 번만 onTrigger 를 부른다.
+// 이상이 사라지거나 로봇이 멈추면(active=false) 다시 감시한다.
+function useAutoEstop(abnormal: Issue[], active: boolean, onTrigger: (reason: string) => void) {
+  const watching = active && abnormal.length > 0
+  const latest = useRef({ abnormal, onTrigger })
+  const fired = useRef(false)
+
+  useEffect(() => {
+    latest.current = { abnormal, onTrigger }
+  })
+
+  useEffect(() => {
+    if (!watching) {
+      fired.current = false
+      return
+    }
+    if (fired.current) return
+    const timer = setTimeout(() => {
+      fired.current = true
+      latest.current.onTrigger(latest.current.abnormal.map((i) => i.detail).join(' / '))
+    }, AUTO_ESTOP_MS)
+    return () => clearTimeout(timer)
+  }, [watching])
+}
+
 // 비상정지 화면. 원인(카메라, 로봇팔, 로봇 비상정지)이 하나라도 있으면 화면 전체를 덮는다.
 // 해제 요청이 성공하면 원인이 바뀌기 전까지 다시 띄우지 않는다.
 function EstopOverlay({ reasons }: { reasons: { key: string; detail: string }[] }) {
@@ -726,12 +787,14 @@ function EstopOverlay({ reasons }: { reasons: { key: string; detail: string }[] 
   const [dismissedKey, setDismissedKey] = useState<string | null>(null)
   const key = reasons.map((r) => `${r.key}:${r.detail}`).join('|')
 
+  // 비상정지가 풀리면 해제 기록을 지운다. 그래야 같은 이유로 다시 멈췄을 때도 화면이 뜬다.
+  if (!reasons.length && dismissedKey !== null) setDismissedKey(null)
   if (!reasons.length || dismissedKey === key) return null
 
   const onClear = async () => {
     setClearing(true)
     try {
-      await api.clearEstop()
+      await api.control.resume()
       toast('success', '비상정지를 해제했습니다', '멈춘 사과부터 이어서 진행합니다')
       setDismissedKey(key)
     } catch (e) {
@@ -827,6 +890,43 @@ export default function Dashboard() {
   const detail = issues?.length ? issues.map((i) => `${i.label}: ${i.detail}`).join('\n') : undefined
 
   useIssueToasts(issues)
+
+  const [estopping, setEstopping] = useState(false)
+  const sendEstop = async (autoReason?: string) => {
+    setEstopping(true)
+    try {
+      await api.control.estop()
+      if (autoReason) toast('error', '10초 넘게 이상이 이어져 비상정지했습니다', autoReason)
+      else toast('error', '비상정지했습니다')
+    } catch (e) {
+      toast('error', '비상정지를 보내지 못했습니다', polite((e as Error).message))
+    } finally {
+      setEstopping(false)
+    }
+  }
+
+  // 카메라, 로봇팔, 로봇 응답 없음, 자동 조정 중단이 로봇이 움직이는 동안 10초 넘게 이어지면 비상정지
+  const robotMoving = judge.mission?.status === 'running' || judge.mission?.status === 'stalled'
+  const abnormal = issues?.filter((i) => ['camera', 'arm', 'stalled', 'frozen'].includes(i.key)) ?? []
+  useAutoEstop(abnormal, robotMoving, (reason) => sendEstop(reason))
+
+  const [pending, setPending] = useState<ControlAction | null>(null)
+  const onControl = async (action: ControlAction) => {
+    setPending(action)
+    try {
+      if (action === 'start') {
+        await api.control.start()
+        toast('success', '미션을 시작했습니다')
+      } else {
+        await api.control.stop()
+        toast('info', '지금 사과까지만 하고 멈춥니다')
+      }
+    } catch (e) {
+      toast('error', action === 'start' ? '미션을 시작하지 못했습니다' : '정지하지 못했습니다', polite((e as Error).message))
+    } finally {
+      setPending(null)
+    }
+  }
   useRollToast(judge.motion)
   useMissionFinishedToast(judge.mission)
 
@@ -854,7 +954,7 @@ export default function Dashboard() {
 
   return (
     <>
-      <DashboardHeader connection={connection} state={state} detail={detail} />
+      <DashboardHeader connection={connection} state={state} detail={detail} onEstop={() => sendEstop()} estopping={estopping} />
       <Toaster />
       <EstopOverlay reasons={issues?.filter((i) => i.estop) ?? []} />
       <div className="flex flex-col gap-10 p-20">
@@ -866,7 +966,7 @@ export default function Dashboard() {
             <ConfidenceCard average={average} />
           </div>
           <div className="grid grid-cols-2 gap-6">
-            <MissionCard mission={judge.mission} events={judge.missionEvents} />
+            <MissionCard mission={judge.mission} events={judge.missionEvents} pending={pending} onControl={onControl} />
             <MissionEventsCard events={judge.missionEvents} />
           </div>
           </div>

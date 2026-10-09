@@ -79,6 +79,16 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json()
 }
 
+async function control(path: string, body?: object) {
+  const data = await request<{ ok?: boolean; error?: string }>(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body ?? {}),
+  })
+  if (data.ok === false) throw new Error(data.error ?? '로봇이 명령을 거부했습니다')
+  return data
+}
+
 export const api = {
   // 세션 쿠키 발급용. 웹소켓은 이 쿠키가 없으면 4401 로 닫힌다.
   session: () => request<{ session: string; connections: number }>('/session'),
@@ -90,12 +100,16 @@ export const api = {
   // 최신 회차가 앞에 온다.
   runs: () => request<Run[]>('/runs'),
   resetStats: () => request<{ stats: Stats }>('/stats/reset', { method: 'POST' }),
-  // 비상정지(또는 오류 정지) 해제 → 로봇이 멈춘 사과부터 이어서 한다. 모터를 다시 켜느라 몇 초 걸린다.
-  // 지금 할 수 없는 상태면 200 에 {ok:false, error} 로 오므로 본문도 확인한다.
-  clearEstop: async () => {
-    const data = await request<{ ok?: boolean; error?: string }>('/control/resume', { method: 'POST' })
-    if (data.ok === false) throw new Error(data.error ?? '로봇이 해제를 거부했습니다')
-    return data
+  // 로봇 미션 제어. 서버가 로봇 PC 의 미션 프로그램으로 넘긴다.
+  // 지금 할 수 없는 명령이면 200 에 {ok:false, error} 로 오므로 본문도 확인한다.
+  control: {
+    // apples 를 빼면 개수 제한 없이 사과가 없을 때까지 한다.
+    start: (apples?: number) => control('/control/start', apples === undefined ? {} : { apples }),
+    // 지금 사과까지만 하고 멈춘다.
+    stop: () => control('/control/stop'),
+    estop: () => control('/control/estop'),
+    // 비상정지(또는 오류 정지) 해제 → 멈춘 사과부터 이어서 한다. 모터를 다시 켜느라 몇 초 걸린다.
+    resume: () => control('/control/resume'),
   },
 }
 
