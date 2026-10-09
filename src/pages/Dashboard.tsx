@@ -135,7 +135,7 @@ function VideoCard({ live, box }: { live: boolean | undefined; box: ActiveBox })
       )}
 
       <div className="relative px-5 pt-6">
-        <h3 className="text-xl font-semibold [text-shadow:0_0_4px_rgba(0,0,0,0.5)]">실시간 영상</h3>
+        <h3 className="text-xl font-semibold [text-shadow:0_1px_2px_rgba(0,0,0,0.8),0_0_8px_rgba(0,0,0,0.8)]">실시간 영상</h3>
       </div>
     </Card>
   )
