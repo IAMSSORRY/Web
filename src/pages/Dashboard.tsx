@@ -75,17 +75,18 @@ function useArm() {
   return arm
 }
 
-// 로봇 미션 프로그램 상태. 꺼져 있거나 서버가 못 닿으면 null.
+// 로봇 미션 프로그램 상태. 꺼져 있거나 서버가 못 닿으면 null 이고, 그 이유(서버 detail)를 error 에 둔다.
 function useControlStatus() {
   const [status, setStatus] = useState<ControlStatus | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     let alive = true
     const tick = () =>
       api.control
         .status()
-        .then((d) => alive && setStatus(d))
-        .catch(() => alive && setStatus(null))
+        .then((d) => alive && (setStatus(d), setError(null)))
+        .catch((e: Error) => alive && (setStatus(null), setError(e.message)))
     tick()
     const id = setInterval(tick, POLL_MS)
     return () => {
@@ -94,7 +95,7 @@ function useControlStatus() {
     }
   }, [])
 
-  return status
+  return { status, error }
 }
 
 function Section({ id, title, right, children }: { id: string; title: string; right?: React.ReactNode; children: React.ReactNode }) {
@@ -927,7 +928,7 @@ export default function Dashboard() {
   const judge = useJudgeStream()
   const cameras = useCameras()
   const arm = useArm()
-  const control = useControlStatus()
+  const { status: control, error: controlError } = useControlStatus()
   const robotState = control?.state ?? null
   const [resetting, setResetting] = useState(false)
   const [confirming, setConfirming] = useState(false)
@@ -961,7 +962,8 @@ export default function Dashboard() {
                   key: 'robot-offline',
                   label: '로봇 연결 끊김',
                   level: 'warn' as const,
-                  detail: `로봇 미션 프로그램에 연결할 수 없습니다(로봇 PC 에서 mission.py --serve 로 켜야 웹에서 제어할 수 있습니다).${
+                  // 꺼져 있는 것만이 아니라 토큰 불일치 같은 다른 이유도 있으므로 서버가 준 이유를 그대로 보여준다.
+                  detail: `${polite(controlError) ?? '로봇 미션 프로그램에 연결할 수 없습니다'} (로봇 PC 에서 mission.py --serve 가 켜져 있는지, 토큰이 같은지 확인하세요).${
                     judge.mission?.status === 'estop' ? ` 마지막 기록: 비상정지 — ${polite(judge.mission.estop_reason) ?? '원인 미상'}` : ''
                   }`,
                 }]
