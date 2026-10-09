@@ -21,6 +21,8 @@ export function useJudgeStream() {
   const [mission, setMission] = useState<MissionState | null>(null)
   // 최신 이벤트가 앞에 온다.
   const [missionEvents, setMissionEvents] = useState<MissionEvent[]>([])
+  // 현재 회차 번호. snapshot(연결 직후, 새 회차 직후)마다 다시 확인한다. 회차별로 화면 상태를 비울 때 쓴다.
+  const [runId, setRunId] = useState<number | null>(null)
   // 브라우저 DB 에 저장된 판정 수. 저장이 끝날 때마다 바뀐다.
   const [savedVersion, setSavedVersion] = useState(0)
   const [activeBox, setActiveBox] = useState<{ bbox: Bbox; grade: JudgeRecord['grade']; cam: string } | null>(null)
@@ -43,7 +45,9 @@ export function useJudgeStream() {
       Promise.all([api.mission(MAX_EVENTS), api.runs().catch(() => [])])
         .then(([r, runs]) => {
           if (disposed) return
-          const runStart = runs.find((run) => run.ended_at === null)?.started_at ?? null
+          const current = runs.find((run) => run.ended_at === null)
+          const runStart = current?.started_at ?? null
+          setRunId(current?.id ?? null)
           setMission(r.state)
           // 서버 이벤트는 회차 단위라 이전 미션 것도 섞여 온다. 현재 미션과 현재 회차가 시작된 뒤의 것만 보여준다.
           const since = Math.max(r.state.started_at ?? 0, runStart ?? 0)
@@ -141,5 +145,6 @@ export function useJudgeStream() {
     savedVersion,
     mission,
     missionEvents,
+    runId,
   }
 }

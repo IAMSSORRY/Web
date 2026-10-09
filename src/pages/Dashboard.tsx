@@ -1198,7 +1198,8 @@ export default function Dashboard() {
             <RunsCard refreshKey={`${runsKey}-${judge.stats.total}`} />
             <div className="grid gap-4 lg:grid-cols-2 lg:gap-6">
               <LocalArchiveCard version={judge.savedVersion} />
-              <AdviceCard />
+              {/* 회차가 바뀌면(새 회차 시작) 이전 회차에 대한 답변을 비운다. */}
+              <AdviceCard key={judge.runId ?? 'none'} />
             </div>
           </div>
         </Section>
