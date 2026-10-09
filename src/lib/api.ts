@@ -24,7 +24,8 @@ export type JudgeRecord = {
   extra?: { dark_ratio: number; dark_max: number } | null
 }
 
-export type MissionStatus = 'idle' | 'running' | 'finished' | 'estop'
+// stalled: 진행 중이었는데 로봇 소식이 끊김. 이벤트가 다시 오면 서버가 running 으로 되돌린다.
+export type MissionStatus = 'idle' | 'running' | 'stalled' | 'finished' | 'estop'
 export type MissionPhase = 'pick' | 'inspect' | 'place' | 'home'
 
 export type MissionState = {

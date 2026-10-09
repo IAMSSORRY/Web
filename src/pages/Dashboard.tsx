@@ -246,6 +246,7 @@ const phaseLabel: Record<MissionPhase, string> = {
 const statusLabel: Record<MissionState['status'], { text: string; className: string }> = {
   idle: { text: '대기 중', className: 'bg-border text-info' },
   running: { text: '진행 중', className: 'bg-grade-high text-black' },
+  stalled: { text: '응답 없음', className: 'bg-grade-mid text-black' },
   finished: { text: '완료', className: 'bg-white text-black' },
   estop: { text: '비상정지', className: 'bg-grade-low text-black' },
 }
@@ -259,8 +260,15 @@ function Stat({ label, value, tone = '' }: { label: string; value: React.ReactNo
   )
 }
 
-function MissionCard({ mission }: { mission: MissionState | null }) {
-  const status = mission ? statusLabel[mission.status] : null
+// stalled 의 원인은 state 에 없고 stalled 이벤트의 reason 으로 온다.
+function stalledReason(events: MissionEvent[]) {
+  const reason = events.find((e) => e.event === 'stalled')?.reason
+  return typeof reason === 'string' ? polite(reason) : undefined
+}
+
+function MissionCard({ mission, events }: { mission: MissionState | null; events: MissionEvent[] }) {
+  // 처음 보는 status 가 와도 깨지지 않게 배지는 생략한다.
+  const status = mission ? (statusLabel[mission.status] ?? null) : null
   const index = mission?.apple_index ?? 0
   const count = mission?.apple_count ?? 0
 
@@ -289,7 +297,9 @@ function MissionCard({ mission }: { mission: MissionState | null }) {
                   ? `미션 완료${mission.duration_s !== null ? ` (${mission.duration_s.toFixed(1)}초)` : ''}`
                   : mission.status === 'estop'
                     ? `비상정지: ${polite(mission.estop_reason) ?? '원인 미상'}`
-                    : mission.phase
+                    : mission.status === 'stalled'
+                      ? `${mission.phase ? `${phaseLabel[mission.phase] ?? mission.phase}에서 ` : ''}멈춤`
+                      : mission.phase
                       ? phaseLabel[mission.phase]
                       : '대기 중'}
               </span>
@@ -308,6 +318,11 @@ function MissionCard({ mission }: { mission: MissionState | null }) {
             <Stat label="놓는 높이" value={mission.adaptive ? `${(mission.adaptive.release_h * 100).toFixed(1)}cm` : '—'} />
           </div>
 
+          {mission.status === 'stalled' && (
+            <p className="text-sm font-semibold text-grade-mid">
+              로봇 응답 없음{stalledReason(events) ? ` — ${stalledReason(events)}` : ''}
+            </p>
+          )}
           {mission.adaptive?.frozen && (
             <p className="text-sm font-semibold text-grade-mid">자동 조정 중단 — 점검이 필요합니다</p>
           )}
@@ -351,6 +366,10 @@ function describeEvent(e: MissionEvent): { text: string; tone?: string } | null 
     case 'end': {
       const d = f(e, 'duration_s')
       return { text: `미션 완료${typeof d === 'number' ? ` (${d.toFixed(1)}초)` : ''}`, tone: 'text-grade-high' }
+    }
+    case 'stalled': {
+      const reason = f(e, 'reason')
+      return { text: `로봇 응답 없음${reason ? ` (${polite(String(reason))})` : ''}`, tone: 'text-grade-mid' }
     }
     case 'estop':
       return { text: `비상정지${f(e, 'reason') ? `: ${polite(String(f(e, 'reason')))}` : ''}`, tone: 'text-grade-low' }
@@ -677,8 +696,11 @@ export default function Dashboard() {
             ...(arm?.ok === false
               ? [{ key: 'arm', label: '로봇팔 문제', level: 'down' as const, detail: polite(arm.message) ?? '로봇팔 상태를 확인하세요' }]
               : []),
-            ...(judge.rawMission?.status === 'estop'
-              ? [{ key: 'estop', label: '비상정지', level: 'down' as const, detail: polite(judge.rawMission.estop_reason) ?? '로봇이 비상정지했습니다' }]
+            ...(judge.mission?.status === 'estop'
+              ? [{ key: 'estop', label: '비상정지', level: 'down' as const, detail: polite(judge.mission.estop_reason) ?? '로봇이 비상정지했습니다' }]
+              : []),
+            ...(judge.mission?.status === 'stalled'
+              ? [{ key: 'stalled', label: '로봇 응답 없음', level: 'warn' as const, detail: stalledReason(judge.missionEvents) ?? '로봇에서 소식이 끊겼습니다' }]
               : []),
             ...(judge.mission?.adaptive?.frozen
               ? [{ key: 'frozen', label: '자동 조정 중단', level: 'warn' as const, detail: '굴림 자동 조정이 멈췄습니다. 점검이 필요합니다' }]
@@ -743,7 +765,7 @@ export default function Dashboard() {
             <ConfidenceCard average={average} />
           </div>
           <div className="grid grid-cols-2 gap-6">
-            <MissionCard mission={judge.mission} />
+            <MissionCard mission={judge.mission} events={judge.missionEvents} />
             <MissionEventsCard events={judge.missionEvents} />
           </div>
           </div>
