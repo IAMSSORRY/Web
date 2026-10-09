@@ -3,7 +3,7 @@ import { api, wsUrl, type JudgeMessage, type JudgeRecord, type Stats } from '../
 
 export type Bbox = [number, number, number, number]
 export type Motion = Extract<JudgeMessage, { type: 'motion' }>
-export type LiveJudge = JudgeRecord & { bbox?: Bbox }
+export type LiveJudge = JudgeRecord & { bbox?: Bbox; cam?: string }
 
 const MAX_RECENT = 50
 // 판정 순간의 위치라서 사과가 움직이면 어긋난다. 잠깐만 보여준다.
@@ -16,7 +16,7 @@ export function useJudgeStream() {
   // 최신 판정이 앞에 온다.
   const [recent, setRecent] = useState<LiveJudge[]>([])
   const [motion, setMotion] = useState<Motion | null>(null)
-  const [activeBox, setActiveBox] = useState<{ bbox: Bbox; grade: JudgeRecord['grade'] } | null>(null)
+  const [activeBox, setActiveBox] = useState<{ bbox: Bbox; grade: JudgeRecord['grade']; cam: string } | null>(null)
 
   useEffect(() => {
     let ws: WebSocket | null = null
@@ -33,10 +33,10 @@ export function useJudgeStream() {
           setMotion(null)
           break
         case 'judge': {
-          const { id, grade, confidence, v_value, threshold, ts, bbox } = msg
-          const judge: LiveJudge = { id, grade, confidence, v_value, threshold, ts, bbox, roll_detected: null }
+          const { id, grade, confidence, v_value, threshold, ts, bbox, cam } = msg
+          const judge: LiveJudge = { id, grade, confidence, v_value, threshold, ts, bbox, cam, roll_detected: null }
           setRecent((prev) => [judge, ...prev].slice(0, MAX_RECENT))
-          setActiveBox({ bbox, grade })
+          setActiveBox({ bbox, grade, cam })
           clearTimeout(boxTimer)
           boxTimer = setTimeout(() => setActiveBox(null), BOX_VISIBLE_MS)
           break

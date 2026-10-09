@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useCameraStream, type StreamStatus } from '../hooks/useCameraStream'
 import { useJudgeStream, type LiveJudge } from '../hooks/useJudgeStream'
-import { api, type Grade, type Health } from '../lib/api'
+import { api, type Cameras, type Grade } from '../lib/api'
 
 const POLL_MS = 2000
 
@@ -9,7 +9,10 @@ const statusLabel: Record<StreamStatus, string> = {
   connecting: '연결 중',
   open: '연결됨',
   closed: '끊김 · 재연결 중',
+  missing: '없는 카메라',
 }
+
+const camLabel: Record<string, string> = { top: '고정 카메라', wrist: '손목 카메라' }
 
 const gradeColor: Record<Grade, string> = {
   상: 'text-emerald-400 border-emerald-400',
@@ -36,16 +39,17 @@ function Panel({ title, right, children, className = '' }: { title: string; righ
   )
 }
 
-function useHealth() {
-  const [health, setHealth] = useState<Health | null>(null)
+// /cameras 응답으로 서버 연결 상태와 카메라별 프레임 수신 여부를 같이 본다.
+function useCameras() {
+  const [cameras, setCameras] = useState<Cameras | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     let alive = true
     const tick = () =>
       api
-        .health()
-        .then((d) => alive && (setHealth(d), setError(null)))
+        .cameras()
+        .then((d) => alive && (setCameras(d), setError(null)))
         .catch((e: Error) => alive && setError(e.message))
     tick()
     const id = setInterval(tick, POLL_MS)
@@ -55,11 +59,12 @@ function useHealth() {
     }
   }, [])
 
-  return { health, error }
+  return { cameras, error }
 }
 
 // 판정 근거: V값과 임계값의 비교
 function Evidence({ judge }: { judge: LiveJudge }) {
+  if (judge.v_value === null || judge.threshold === null) return null
   const passed = judge.v_value >= judge.threshold
   return (
     <p className="font-mono text-sm">
@@ -73,14 +78,75 @@ function RollBadge({ value }: { value: boolean | null }) {
   return value ? <span className="text-red-400">굴림</span> : <span className="text-info">정상</span>
 }
 
-export default function Dashboard() {
-  const camera = useCameraStream()
-  const judge = useJudgeStream()
-  const { health, error: healthError } = useHealth()
+type ActiveBox = ReturnType<typeof useJudgeStream>['activeBox']
+
+function CameraView({ cam, live, box, className = '' }: { cam: string; live?: boolean; box: ActiveBox; className?: string }) {
+  const camera = useCameraStream(cam)
   const [natural, setNatural] = useState({ w: 640, h: 480 })
+  // bbox 는 판정한 카메라의 JPEG 픽셀 좌표라서 그 카메라에만 그린다.
+  const shownBox = box?.cam === cam ? box : null
+
+  return (
+    <Panel
+      title={camLabel[cam] ?? cam}
+      className={className}
+      right={
+        <div className="flex items-center gap-3 text-sm text-info">
+          <Dot ok={camera.status === 'open' && live !== false} />
+          {camera.status === 'open' && live === false ? '카메라 연결 대기 중' : statusLabel[camera.status]}
+          <span className="tabular-nums">{camera.fps} fps</span>
+        </div>
+      }
+    >
+      {/* 컨테이너 비율을 원본 프레임과 같게 맞춰서 bbox 를 퍼센트로 그대로 얹는다. */}
+      <div
+        className="relative overflow-hidden rounded-lg border border-border bg-black"
+        style={{ aspectRatio: `${natural.w} / ${natural.h}` }}
+      >
+        {camera.frameUrl ? (
+          <img
+            src={camera.frameUrl}
+            alt={`${camLabel[cam] ?? cam} 영상`}
+            className="absolute inset-0 h-full w-full"
+            onLoad={(e) => {
+              const { naturalWidth: w, naturalHeight: h } = e.currentTarget
+              if (w !== natural.w || h !== natural.h) setNatural({ w, h })
+            }}
+          />
+        ) : (
+          <p className="absolute inset-0 flex items-center justify-center text-info">
+            {camera.status === 'open' ? '카메라 연결 대기 중' : '카메라에 연결하는 중입니다'}
+          </p>
+        )}
+        {shownBox && (
+          <div
+            className={`absolute border-2 ${gradeColor[shownBox.grade]}`}
+            style={{
+              left: `${(shownBox.bbox[0] / natural.w) * 100}%`,
+              top: `${(shownBox.bbox[1] / natural.h) * 100}%`,
+              width: `${(shownBox.bbox[2] / natural.w) * 100}%`,
+              height: `${(shownBox.bbox[3] / natural.h) * 100}%`,
+            }}
+          >
+            <span className="absolute -top-7 left-0 rounded bg-black/70 px-2 py-0.5 text-sm font-semibold">
+              {shownBox.grade}
+            </span>
+          </div>
+        )}
+      </div>
+    </Panel>
+  )
+}
+
+export default function Dashboard() {
+  const judge = useJudgeStream()
+  const { cameras, error: camerasError } = useCameras()
   const [resetting, setResetting] = useState(false)
 
-  const serverOk = !healthError && health?.status === 'ok'
+  const serverOk = !camerasError && cameras !== null
+  const mainCam = cameras?.default ?? 'top'
+  const sideCams = cameras ? cameras.cameras.map((c) => c.name).filter((n) => n !== mainCam) : ['wrist']
+  const isLive = (name: string) => cameras?.cameras.find((c) => c.name === name)?.live
   const latest = judge.recent[0]
   const { stats } = judge
   const ratioHigh = stats.total ? stats.상 / stats.total : 0
@@ -102,7 +168,7 @@ export default function Dashboard() {
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 rounded-full border border-border bg-main-2 px-4 py-2 text-sm">
             <Dot ok={serverOk} />
-            {serverOk ? `서버 정상 · ${health?.ros_node}` : '서버 응답 없음'}
+            {serverOk ? '서버 정상' : '서버 응답 없음'}
           </div>
           <div className="flex items-center gap-2 rounded-full border border-border bg-main-2 px-4 py-2 text-sm">
             <Dot ok={judge.connected} />
@@ -119,57 +185,13 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-3 gap-6">
-        <Panel
-          title="카메라"
-          className="col-span-2"
-          right={
-            <div className="flex items-center gap-3 text-sm text-info">
-              <Dot ok={camera.status === 'open'} />
-              {statusLabel[camera.status]}
-              <span className="tabular-nums">{camera.fps} fps</span>
-            </div>
-          }
-        >
-          {/* 컨테이너 비율을 원본 프레임과 같게 맞춰서 bbox 를 퍼센트로 그대로 얹는다. */}
-          <div
-            className="relative overflow-hidden rounded-lg border border-border bg-black"
-            style={{ aspectRatio: `${natural.w} / ${natural.h}` }}
-          >
-            {camera.frameUrl ? (
-              <img
-                src={camera.frameUrl}
-                alt="카메라 영상"
-                className="absolute inset-0 h-full w-full"
-                onLoad={(e) => {
-                  const { naturalWidth: w, naturalHeight: h } = e.currentTarget
-                  if (w !== natural.w || h !== natural.h) setNatural({ w, h })
-                }}
-              />
-            ) : (
-              <p className="absolute inset-0 flex items-center justify-center text-info">
-                {camera.status === 'open' ? '프레임을 기다리는 중입니다' : '카메라에 연결하는 중입니다'}
-              </p>
-            )}
-            {judge.activeBox && (
-              <div
-                className={`absolute border-2 ${gradeColor[judge.activeBox.grade]}`}
-                style={{
-                  left: `${(judge.activeBox.bbox[0] / natural.w) * 100}%`,
-                  top: `${(judge.activeBox.bbox[1] / natural.h) * 100}%`,
-                  width: `${(judge.activeBox.bbox[2] / natural.w) * 100}%`,
-                  height: `${(judge.activeBox.bbox[3] / natural.h) * 100}%`,
-                }}
-              >
-                <span className="absolute -top-7 left-0 rounded bg-black/70 px-2 py-0.5 text-sm font-semibold">
-                  {judge.activeBox.grade}
-                </span>
-              </div>
-            )}
-          </div>
-          {camera.topic && <p className="font-mono text-xs text-white/50">{camera.topic}</p>}
-        </Panel>
+        <CameraView cam={mainCam} live={isLive(mainCam)} box={judge.activeBox} className="col-span-2" />
 
         <div className="flex flex-col gap-6">
+          {sideCams.map((name) => (
+            <CameraView key={name} cam={name} live={isLive(name)} box={judge.activeBox} />
+          ))}
+
           <Panel title="최근 판정" right={latest && <span className="text-sm text-info">#{latest.id} · {fmtTime(latest.ts)}</span>}>
             {latest ? (
               <div className="flex flex-col gap-4">
@@ -180,10 +202,12 @@ export default function Dashboard() {
                 <div className="h-2 overflow-hidden rounded-full bg-main-3">
                   <div className="h-full bg-white" style={{ width: pct(latest.confidence) }} />
                 </div>
-                <div className="flex flex-col gap-1">
-                  <p className="text-sm text-info">판정 근거</p>
-                  <Evidence judge={latest} />
-                </div>
+                {latest.v_value !== null && latest.threshold !== null && (
+                  <div className="flex flex-col gap-1">
+                    <p className="text-sm text-info">판정 근거</p>
+                    <Evidence judge={latest} />
+                  </div>
+                )}
               </div>
             ) : (
               <p className="text-info">아직 판정이 없습니다</p>
@@ -246,7 +270,7 @@ export default function Dashboard() {
                     <td>{fmtTime(r.ts)}</td>
                     <td className={`font-semibold ${gradeColor[r.grade]}`}>{r.grade}</td>
                     <td>{pct(r.confidence)}</td>
-                    <td className="font-mono">{r.v_value} / {r.threshold}</td>
+                    <td className="font-mono">{r.v_value !== null && r.threshold !== null ? `${r.v_value} / ${r.threshold}` : '—'}</td>
                     <td><RollBadge value={r.roll_detected} /></td>
                   </tr>
                 ))}

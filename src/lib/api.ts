@@ -1,8 +1,8 @@
 // 백엔드와 같은 출처에서 열린다고 가정하고 상대 경로로만 부른다.
 // 개발 때는 vite.config.ts 의 프록시가 FastAPI 로 넘긴다.
 
-export type Health = { status: string; ros_node: string | null }
-export type Topics = Record<string, string[]>
+export type Health = { status: string; camera_source: string; cameras: string[] }
+export type Cameras = { default: string; cameras: { name: string; live: boolean }[] }
 
 export type Grade = '상' | '중'
 export type Stats = { 상: number; 중: number; total: number }
@@ -11,8 +11,9 @@ export type JudgeRecord = {
   id: number
   grade: Grade
   confidence: number
-  v_value: number
-  threshold: number
+  // 근거 수치의 출처가 아직 확정되지 않아 null 이 올 수 있다.
+  v_value: number | null
+  threshold: number | null
   ts: number
   roll_detected: boolean | null
 }
@@ -21,7 +22,7 @@ export type StatsResponse = { stats: Stats; cycle_time: number | null; recent: J
 
 export type JudgeMessage =
   | ({ type: 'snapshot' } & StatsResponse)
-  | ({ type: 'judge'; bbox: [number, number, number, number] } & Omit<JudgeRecord, 'roll_detected'>)
+  | ({ type: 'judge'; bbox: [number, number, number, number]; cam: string } & Omit<JudgeRecord, 'roll_detected'>)
   | { type: 'stats'; stats: Stats; cycle_time: number | null }
   | { type: 'motion'; approach_speed: number; place_height: number; roll_detected: boolean; ts: number }
 
@@ -38,14 +39,7 @@ export const api = {
   // 세션 쿠키 발급용. 웹소켓은 이 쿠키가 없으면 4401 로 닫힌다.
   session: () => request<{ session: string; connections: number }>('/session'),
   health: () => request<Health>('/health'),
-  topics: () => request<Topics>('/topics'),
-  last: () => request<{ last_message: string | null }>('/last'),
-  publish: (text: string) =>
-    request<{ published: string }>('/publish', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text }),
-    }),
+  cameras: () => request<Cameras>('/cameras'),
   resetStats: () => request<{ stats: Stats }>('/stats/reset', { method: 'POST' }),
 }
 
