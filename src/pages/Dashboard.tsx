@@ -792,102 +792,104 @@ function LocalArchiveCard({ version }: { version: number }) {
   )
 }
 
-// 누적 기록을 바탕으로 서버가 AI 조언을 만들어 준다. 한 회차 안의 대화를 채팅처럼 쌓아 보여준다.
-// 회차가 바뀌면 부모가 key 를 바꿔 대화 전체를 비운다.
-type ChatMessage =
-  | { id: number; role: 'user'; text: string }
-  | { id: number; role: 'ai'; advice: Advice }
-  | { id: number; role: 'error'; text: string }
-// 메시지 종류별로 id 를 뺀 모양(Omit 은 유니온을 하나로 합쳐 버려서 나눠서 뺀다)
-type NewChatMessage = ChatMessage extends infer M ? (M extends ChatMessage ? Omit<M, 'id'> : never) : never
+// 누적 기록을 바탕으로 서버가 AI 분석을 만들어 준다. 버튼을 누를 때 한 번만 만든다.
+// 서버 /advice 는 질문 하나에 답 하나라서 항목별 질문을 동시에 보내고, 오는 대로 채운다.
+// 회차가 바뀌면 부모가 key 를 바꿔 결과를 비운다.
+const ADVICE_TOPICS = [
+  {
+    title: '등급 분포 분석',
+    question: '이번 회차의 상/중/하 등급 분포와 빨강 비율, 신뢰도 경향을 분석해 주세요. 눈에 띄는 점을 짧게 정리해 주세요.',
+  },
+  {
+    title: '낙하 · 멍 상태 확인',
+    question: '이번 회차에서 사과를 떨어뜨린 경우와 흠(멍) 비율이 높은 사과를 확인하고, 품질에 영향이 있었는지 짧게 정리해 주세요.',
+  },
+  {
+    title: '작업 개선 조언',
+    question: '파지 실패, 건너뜀, 떨어뜨림, 사이클 타임을 바탕으로 다음 작업에서 개선할 점을 짧게 조언해 주세요.',
+  },
+] as const
+
+// 항목마다 같은 경고가 반복되거나 마크다운 기호가 섞여 오지 않게 모든 질문 뒤에 붙인다.
+const ADVICE_RULES =
+  ' 이 항목에 대한 내용만 답하고, 카메라 · 로봇 연결 상태 같은 경고나 머리말은 넣지 마세요.' +
+  " 마크다운 기호(*, #, ---) 없이 3~5줄의 평문으로 답해 주세요. '굴림'은 '떨어뜨림'이라고 불러 주세요."
+
+// 그래도 섞여 오는 마크다운 기호를 화면에 맞게 정리한다.
+const plainAdvice = (text: string) =>
+  text
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/^#+\s*/gm, '')
+    .replace(/^\s*-{3,}\s*$/gm, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+
+type AdviceResult = { status: 'loading' } | { status: 'done'; advice: Advice } | { status: 'error'; message: string }
 
 const fmtAdviceTime = (t: Advice['generated_at']) => fmtTime(typeof t === 'number' ? t : Date.parse(t) / 1000)
 
 function AdviceCard() {
-  const [question, setQuestion] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [messages, setMessages] = useState<ChatMessage[]>([])
-  const nextId = useRef(1)
-  const listRef = useRef<HTMLDivElement>(null)
+  const [results, setResults] = useState<AdviceResult[] | null>(null)
+  const loading = results?.some((r) => r.status === 'loading') ?? false
 
-  // 새 메시지나 로딩 표시가 생기면 맨 아래로 내린다.
-  useEffect(() => {
-    const el = listRef.current
-    if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
-  }, [messages, loading])
-
-  const push = (m: NewChatMessage) =>
-    setMessages((prev) => [...prev, { ...m, id: nextId.current++ } as ChatMessage])
-
-  const onAsk = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (loading) return
-    const q = question.trim()
-    push({ role: 'user', text: q || '전체 요약을 부탁합니다' })
-    setQuestion('')
-    setLoading(true)
-    try {
-      push({ role: 'ai', advice: await api.advice(q || undefined) })
-    } catch (err) {
-      // 503 이면 서버 detail 문구가 그대로 온다.
-      push({ role: 'error', text: polite((err as Error).message) })
-    } finally {
-      setLoading(false)
-    }
+  const onAnalyze = () => {
+    setResults(ADVICE_TOPICS.map(() => ({ status: 'loading' })))
+    ADVICE_TOPICS.forEach((topic, i) => {
+      api
+        .advice(topic.question + ADVICE_RULES)
+        .then((advice): AdviceResult => ({ status: 'done', advice }))
+        // 503 이면 서버 detail 문구가 그대로 온다.
+        .catch((err: Error): AdviceResult => ({ status: 'error', message: polite(err.message) }))
+        .then((result) => setResults((prev) => prev && prev.map((r, j) => (j === i ? result : r))))
+    })
   }
 
+  const meta = results?.find((r) => r.status === 'done')
+
   return (
-    <Card title="AI 조언" className="h-[420px]">
-      <div ref={listRef} className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-5 pt-4">
-        {messages.length === 0 && !loading && (
-          <p className="m-auto text-center text-sm text-info">
-            궁금한 점을 물어보세요.
-            <br />
-            비워 두고 보내면 지금까지의 기록을 요약해 줍니다.
+    <Card
+      title="AI 분석"
+      right={
+        <button
+          onClick={onAnalyze}
+          disabled={loading}
+          className="ml-auto rounded-full bg-border px-5 py-1.5 text-sm font-semibold hover:bg-divider disabled:opacity-40"
+        >
+          {loading ? '분석 중…' : results ? '다시 분석' : '분석하기'}
+        </button>
+      }
+    >
+      <div className="flex flex-col px-5 pb-6 pt-2">
+        {!results ? (
+          <p className="py-6 text-sm text-info">
+            지금까지의 기록으로 등급 분포, 낙하 · 멍 상태, 작업 개선 조언을 만들어 줍니다. 몇 초 걸립니다.
           </p>
-        )}
-        {messages.map((m) =>
-          m.role === 'user' ? (
-            <p key={m.id} className="max-w-[85%] self-end whitespace-pre-wrap rounded-2xl rounded-br-sm bg-border px-4 py-2 text-sm">
-              {m.text}
-            </p>
-          ) : m.role === 'ai' ? (
-            <div key={m.id} className="flex max-w-[90%] flex-col gap-1 self-start">
-              <p className="whitespace-pre-wrap rounded-2xl rounded-bl-sm bg-main-1 px-4 py-2 leading-relaxed">{m.advice.advice}</p>
-              <span className="px-1 text-xs text-white/40">
-                {m.advice.model} · {fmtAdviceTime(m.advice.generated_at)}
-                {m.advice.cached && ' · 저장된 답변'}
-              </span>
-            </div>
-          ) : (
-            <p key={m.id} className="max-w-[90%] self-start rounded-2xl rounded-bl-sm bg-main-1 px-4 py-2 text-sm text-grade-low">
-              {m.text}
-            </p>
-          ),
-        )}
-        {loading && (
-          <div className="flex items-center gap-2 self-start rounded-2xl rounded-bl-sm bg-main-1 px-4 py-2 text-sm text-info">
-            <span className="size-4 animate-spin rounded-full border-2 border-info border-t-transparent" />
-            조언을 만드는 중입니다
-          </div>
+        ) : (
+          <>
+            {ADVICE_TOPICS.map((topic, i) => {
+              const r = results[i]
+              return (
+                <section key={topic.title} className="flex flex-col gap-2 border-b border-border py-4 last:border-b-0">
+                  <h4 className="text-lg font-bold">{topic.title}</h4>
+                  {r.status === 'loading' && (
+                    <div className="flex items-center gap-2 text-sm text-info">
+                      <span className="size-4 animate-spin rounded-full border-2 border-info border-t-transparent" />
+                      분석하는 중입니다
+                    </div>
+                  )}
+                  {r.status === 'error' && <p className="text-sm text-grade-low">{r.message}</p>}
+                  {r.status === 'done' && <p className="whitespace-pre-wrap leading-relaxed text-info">{plainAdvice(r.advice.advice)}</p>}
+                </section>
+              )
+            })}
+            {meta?.status === 'done' && (
+              <p className="pt-2 text-xs text-white/40">
+                {meta.advice.model} · {fmtAdviceTime(meta.advice.generated_at)}
+              </p>
+            )}
+          </>
         )}
       </div>
-
-      <form onSubmit={onAsk} className="flex gap-2 border-t border-border px-5 py-4">
-        <input
-          value={question}
-          onChange={(e) => setQuestion(e.target.value)}
-          placeholder="궁금한 점 (비워 두면 전체 요약)"
-          className="min-w-0 flex-1 rounded-full border border-border bg-main-1 px-4 py-1.5 text-sm outline-none focus:border-info"
-        />
-        <button
-          type="submit"
-          disabled={loading}
-          className="shrink-0 rounded-full bg-border px-5 py-1.5 text-sm font-semibold hover:bg-divider disabled:opacity-40"
-        >
-          {loading ? '생성 중…' : '보내기'}
-        </button>
-      </form>
     </Card>
   )
 }
