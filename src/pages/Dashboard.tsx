@@ -291,7 +291,8 @@ function MissionCard({ mission, events }: { mission: MissionState | null; events
           <div className="flex flex-col gap-3">
             <div className="flex items-baseline justify-between">
               <span className="text-3xl font-semibold tabular-nums">
-                {count ? `사과 ${index} / ${count}` : '사과 —'}
+                {/* 사과 개수 제한이 없는 미션은 전체 개수(apple_count)가 오지 않는다. */}
+                {count ? `사과 ${index} / ${count}` : index ? `사과 ${index}번째` : '사과 —'}
               </span>
               <span className="text-info">
                 {mission.status === 'finished'
@@ -305,9 +306,12 @@ function MissionCard({ mission, events }: { mission: MissionState | null; events
                       : '대기 중'}
               </span>
             </div>
-            <div className="h-2 overflow-hidden rounded-full bg-border">
-              <div className="h-full bg-white transition-[width] duration-500" style={{ width: count ? `${(index / count) * 100}%` : 0 }} />
-            </div>
+            {/* 전체 개수를 모르면 진행률을 낼 수 없으므로 막대를 숨긴다. */}
+            {count > 0 && (
+              <div className="h-2 overflow-hidden rounded-full bg-border">
+                <div className="h-full bg-white transition-[width] duration-500" style={{ width: `${(index / count) * 100}%` }} />
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-5 gap-4">
@@ -338,10 +342,14 @@ const f = (e: MissionEvent, key: string) => e[key] as number | string | boolean 
 // 이벤트를 화면 문구로. 모르는 이벤트는 null 을 돌려 목록에서 뺀다(상태는 state 로 반영된다).
 function describeEvent(e: MissionEvent): { text: string; tone?: string } | null {
   switch (e.event) {
-    case 'start':
-      return { text: `미션 시작 (사과 ${f(e, 'apple_count')}개)` }
-    case 'apple':
-      return { text: `사과 ${f(e, 'index')} / ${f(e, 'total')} 시작` }
+    case 'start': {
+      const count = f(e, 'apple_count')
+      return { text: count ? `미션 시작 (사과 ${count}개)` : '미션 시작' }
+    }
+    case 'apple': {
+      const total = f(e, 'total')
+      return { text: total ? `사과 ${f(e, 'index')} / ${total} 시작` : `사과 ${f(e, 'index')}번째 시작` }
+    }
     case 'phase': {
       const label = phaseLabel[f(e, 'phase') as MissionPhase]
       return label ? { text: label } : null
