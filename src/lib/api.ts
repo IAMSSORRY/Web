@@ -67,6 +67,18 @@ export type ArmStatus = {
   checked_at: number
 }
 
+// 로봇 미션 프로그램 상태(GET /control/status 와 모든 제어 응답)
+// stopping: 정리 후 정지 진행 중, estopped: 비상정지, error: 오류로 그 자리 정지(힘 이상 등)
+export type RobotState = 'idle' | 'running' | 'stopping' | 'estopped' | 'error' | 'done'
+export type ControlStatus = {
+  ok?: boolean
+  message?: string
+  state: RobotState
+  error: string | null
+  index: number | null
+  ts: number
+}
+
 export type Run = { id: number; started_at: number; ended_at: number | null; stats: Stats }
 
 export type StatsResponse = { stats: Stats; cycle_time: number | null; recent: JudgeRecord[] }
@@ -112,11 +124,15 @@ export const api = {
   // 로봇 미션 제어. 서버가 로봇 PC 의 미션 프로그램으로 넘긴다.
   // 지금 할 수 없는 명령이면 200 에 {ok:false, error} 로 오므로 본문도 확인한다.
   control: {
-    // apples 를 빼면 개수 제한 없이 사과가 없을 때까지 한다.
-    start: (apples?: number) => control('/control/start', apples === undefined ? {} : { apples }),
+    status: () => request<ControlStatus>('/control/status'),
+    // "all" 이면 개수 제한 없이 사과가 없을 때까지 한다.
+    start: (apples: number | 'all' = 'all') => control('/control/start', { apples }),
     // 지금 사과까지만 하고 멈춘다.
     stop: () => control('/control/stop'),
+    // 그 자리에서 즉시 정지하고 모터를 멈춘다(약 0.2초). 팔을 낮추지 않는다. 여러 번 보내도 된다.
     estop: () => control('/control/estop'),
+    // 정리 후 정지: 쥔 사과를 되돌리고 팔을 낮게 내린 뒤 비상정지한다. 수 초 걸린다.
+    park: () => control('/control/park'),
     // 비상정지(또는 오류 정지) 해제 → 멈춘 사과부터 이어서 한다. 모터를 다시 켜느라 몇 초 걸린다.
     resume: () => control('/control/resume'),
   },

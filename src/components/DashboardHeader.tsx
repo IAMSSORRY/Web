@@ -22,10 +22,11 @@ type Props = {
   // 마우스를 올리면 보이는 원인 설명
   detail?: string
   onEstop: () => void
-  estopping: boolean
+  // 정리 후 정지 중이면 비상정지 버튼을 더 눈에 띄게 한다(정리를 버리고 즉시 멈출 수 있다).
+  emphasizeEstop: boolean
 }
 
-export default function DashboardHeader({ connection, state, detail, onEstop, estopping }: Props) {
+export default function DashboardHeader({ connection, state, detail, onEstop, emphasizeEstop }: Props) {
   return (
     <header className="fixed top-0 left-0 right-0 z-50 h-header px-4 lg:px-20 flex items-center justify-between gap-3 bg-main-2/50 border-b border-border shadow-[0_0_20px_rgba(0,0,0,0.3)] backdrop-blur-xl">
       <Link to={paths.landing}>
@@ -49,13 +50,14 @@ export default function DashboardHeader({ connection, state, detail, onEstop, es
         <span className="hidden font-semibold lg:inline">상태</span>
         <span className={`truncate text-sm lg:text-base ${connection === 'ok' ? 'text-info' : 'text-white'}`}>{state}</span>
       </div>
-      {/* 비상 상황용이라 확인 없이 바로 보낸다. */}
+      {/* 비상 상황용이라 확인 없이 바로 보낸다. 응답을 기다리는 동안에도 다시 누를 수 있다. */}
       <button
         onClick={onEstop}
-        disabled={estopping}
-        className="h-8 shrink-0 rounded-full bg-grade-low px-4 text-sm font-semibold lg:px-5 lg:text-base text-black hover:brightness-110 disabled:opacity-60"
+        className={`h-8 shrink-0 rounded-full bg-grade-low px-4 text-sm font-semibold text-white hover:brightness-110 active:brightness-90 lg:px-5 lg:text-base ${
+          emphasizeEstop ? 'animate-pulse ring-4 ring-grade-low/50' : ''
+        }`}
       >
-        {estopping ? '정지 중' : '비상정지'}
+        비상정지
       </button>
       </div>
     </header>
