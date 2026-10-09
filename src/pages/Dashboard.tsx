@@ -562,7 +562,7 @@ function HistoryCard({ recent }: { recent: LiveJudge[] }) {
     <Card title="판정 이력">
       <div className="max-h-96 overflow-auto px-5 pb-5 pt-4">
         <table className="w-full min-w-[560px] whitespace-nowrap md:whitespace-normal">
-          <thead className="sticky top-0 bg-main-3 text-left text-info">
+          <thead className="bg-main-3 text-left text-info md:sticky md:top-0">
             <tr>
               <th className="py-2 font-medium">#</th>
               <th className="font-medium">시각</th>
@@ -637,7 +637,7 @@ function RunsCard({ refreshKey }: { refreshKey: string }) {
         {error && <p className="py-8 text-center text-info">회차 기록을 불러오지 못했습니다</p>}
         {runs && (
           <table className="w-full min-w-[560px] whitespace-nowrap md:whitespace-normal">
-            <thead className="sticky top-0 bg-main-3 text-left text-info">
+            <thead className="bg-main-3 text-left text-info md:sticky md:top-0">
               <tr>
                 <th className="py-2 font-medium">회차</th>
                 <th className="font-medium">시작</th>
@@ -686,8 +686,8 @@ function LocalArchiveCard({ version }: { version: number }) {
 
   return (
     <Card title="브라우저 백업">
-      <div className="flex items-center justify-between gap-6 px-5 pb-6 pt-4">
-        <p className="text-info">
+      <div className="flex flex-col items-start gap-4 px-5 pb-6 pt-4 md:flex-row md:items-center md:justify-between md:gap-6">
+        <p className="break-keep text-info">
           {error
             ? '이 브라우저에서는 기록을 저장할 수 없습니다 (시크릿 창이거나 저장소가 막혀 있습니다)'
             : `서버에 접속할 수 없을 때를 대비해 이 브라우저에도 판정 ${count ?? 0}개를 보관하고 있습니다.`}
