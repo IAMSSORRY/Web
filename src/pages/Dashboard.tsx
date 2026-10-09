@@ -68,11 +68,15 @@ function Card({ title, right, children, className = '' }: { title?: string; righ
   )
 }
 
-function Unavailable({ text }: { text: string }) {
+// alert: 카메라 다운처럼 사용자가 알아야 하는 상태는 디자인의 흐린 색보다 밝게 보인다.
+function Unavailable({ text, detail, alert = false }: { text: string; detail?: string; alert?: boolean }) {
   return (
-    <div className="absolute inset-0 flex flex-col items-center justify-center gap-8">
+    <div className="absolute inset-0 flex flex-col items-center justify-center gap-8 px-10 text-center">
       <img src="/warn.svg" alt="" className="size-16" />
-      <p className="font-light text-border">{text}</p>
+      <div className="flex flex-col gap-2">
+        <p className={`font-light ${alert ? 'text-info' : 'text-border'}`}>{text}</p>
+        {detail && <p className="text-sm font-light text-white/40">{detail}</p>}
+      </div>
     </div>
   )
 }
@@ -84,13 +88,14 @@ const CARD_RATIO = 628 / 330
 // 고정 카메라(top)만 보여준다.
 const CAM = 'top'
 
-function VideoCard({ live, box }: { live: boolean | undefined; box: ActiveBox }) {
+function VideoCard({ box }: { box: ActiveBox }) {
   const camera = useCameraStream(CAM)
   const [natural, setNatural] = useState({ w: 640, h: 480 })
   // bbox 는 판정한 카메라의 JPEG 픽셀 좌표라서 그 카메라에만 그린다.
-  const shownBox = box?.cam === CAM ? box : null
+  // 다운 동안에는 배경 영상이 없으므로 박스도 숨긴다.
+  const shownBox = box?.cam === CAM && !camera.down ? box : null
   const ratio = natural.w / natural.h
-  const hasFrame = camera.frameUrl !== null && live !== false
+  const hasFrame = camera.frameUrl !== null
 
   return (
     <Card className="h-[330px]">
@@ -130,8 +135,15 @@ function VideoCard({ live, box }: { live: boolean | undefined; box: ActiveBox })
           )}
         </div>
       )}
-      {!hasFrame && (
-        <Unavailable text={camera.status === 'open' ? '카메라 연결 대기 중' : '영상을 불러올수 없습니다'} />
+      {camera.down ? (
+        // 마지막 프레임이 있으면 그 위에 어둡게 덮는다.
+        <div className="absolute inset-0 bg-main-3/85">
+          <Unavailable text={camera.down.message} detail={camera.down.reason} alert />
+        </div>
+      ) : (
+        !hasFrame && (
+          <Unavailable text={camera.status === 'open' ? '카메라 연결 대기 중' : '영상을 불러올수 없습니다'} />
+        )
       )}
 
       <div className="relative px-5 pt-6">
@@ -274,7 +286,6 @@ export default function Dashboard() {
   const cameras = useCameras()
   const [resetting, setResetting] = useState(false)
 
-  const topLive = cameras?.cameras.find((c) => c.name === CAM)?.live
 
   const latest = judge.recent[0]
   const average = judge.recent.length
@@ -297,7 +308,7 @@ export default function Dashboard() {
       <div className="flex flex-col gap-10 p-20">
         <Section id="realtime" title="실시간">
           <div className="grid grid-cols-[628fr_302fr_302fr] gap-6">
-            <VideoCard live={topLive} box={judge.activeBox} />
+            <VideoCard box={judge.activeBox} />
             <AppleInfoCard judge={latest} />
             <ConfidenceCard average={average} />
           </div>

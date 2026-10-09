@@ -3,11 +3,15 @@ import { api, wsUrl } from '../lib/api'
 
 export type StreamStatus = 'connecting' | 'open' | 'closed' | 'missing'
 
+// 서버가 보내는 camera_status(live:false). 웹소켓은 유지된 채 카메라만 죽은 상태다.
+export type CameraDown = { message: string; reason?: string }
+
 // 카메라 하나당 웹소켓 하나. 두 대를 보려면 이 훅을 두 번 쓴다.
 export function useCameraStream(cam: string) {
   const [frameUrl, setFrameUrl] = useState<string | null>(null)
   const [status, setStatus] = useState<StreamStatus>('connecting')
   const [fps, setFps] = useState(0)
+  const [down, setDown] = useState<CameraDown | null>(null)
 
   useEffect(() => {
     let ws: WebSocket | null = null
@@ -29,10 +33,20 @@ export function useCameraStream(cam: string) {
       ws.binaryType = 'blob'
       setStatus('connecting')
 
-      ws.onopen = () => setStatus('open')
+      ws.onopen = () => {
+        setStatus('open')
+        // 다운 상태라면 hello 다음에 바로 live:false 가 다시 온다.
+        setDown(null)
+      }
       ws.onmessage = (ev) => {
-        // 첫 텍스트 메시지는 hello 다. 화면에 필요한 건 없다.
-        if (typeof ev.data === 'string') return
+        if (typeof ev.data === 'string') {
+          const msg = JSON.parse(ev.data)
+          // live:true 바로 뒤로 프레임이 다시 오므로 표시만 걷으면 된다.
+          if (msg.type === 'camera_status') {
+            setDown(msg.live ? null : { message: msg.message ?? '카메라를 불러오지 못했습니다', reason: msg.reason })
+          }
+          return
+        }
         const url = URL.createObjectURL(ev.data)
         if (current) URL.revokeObjectURL(current)
         current = url
@@ -64,5 +78,5 @@ export function useCameraStream(cam: string) {
     }
   }, [cam])
 
-  return { frameUrl, status, fps }
+  return { frameUrl, status, fps, down }
 }
