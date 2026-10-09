@@ -193,8 +193,9 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
   )
 }
 
-// 등급 규칙: 빨강 비율 >= 기준 이고 흠 비율 <= 기준 이면 상, 아니면 중
+// 등급 규칙: 빨강 비율 >= 기준 이고 흠·멍 비율 <= 기준 이면 상. 로봇이 이유(reasons)를 보내면 그것을 그대로 쓴다.
 function evidenceText(j: LiveJudge) {
+  if (j.extra?.reasons?.length) return `${j.extra.reasons.join(', ')} → ${j.grade}`
   if (j.v_value === null || j.threshold === null) return null
   const parts = [`빨강 ${num(j.v_value)} ${j.v_value >= j.threshold ? '≥' : '<'} ${num(j.threshold)}`]
   if (j.extra) {
@@ -224,7 +225,12 @@ function AppleInfoCard({ judge }: { judge: LiveJudge | undefined }) {
           {judge.v_value !== null && judge.threshold !== null && (
             <Row label="빨강 비율" value={<Measured value={judge.v_value} limit={judge.threshold} />} />
           )}
-          {judge.extra && <Row label="흠 비율" value={<Measured value={judge.extra.dark_ratio} limit={judge.extra.dark_max} />} />}
+          {/* 멍(회전 검사)을 쟀으면 멍, 아니면 흠을 보인다 — 카드 높이가 정해져 있어 한 줄만 */}
+          {judge.extra && (judge.extra.bruise_ratio != null && judge.extra.bruise_max != null ? (
+            <Row label="멍 비율" value={<Measured value={judge.extra.bruise_ratio} limit={judge.extra.bruise_max} />} />
+          ) : (
+            <Row label="흠 비율" value={<Measured value={judge.extra.dark_ratio} limit={judge.extra.dark_max} />} />
+          ))}
           {/* 수동 입력 판정(v_value 가 null)은 신뢰도가 0.0 으로 오므로 숨긴다. */}
           {judge.v_value !== null && <Row label="신뢰도" value={pct(judge.confidence)} />}
           {judge.v_value === null && <p className="text-sm text-info">카메라 판정 없이 입력된 등급입니다</p>}
@@ -242,6 +248,9 @@ const phaseLabel: Record<MissionPhase, string> = {
   inspect: '검사 중',
   place: '놓는 중',
   home: '복귀 중',
+  nudge: '사과 위치 조정 중',
+  estop_return: '사과 되돌리는 중',
+  estop_rest: '팔 내리는 중',
 }
 
 const statusLabel: Record<MissionState['status'], { text: string; className: string }> = {
