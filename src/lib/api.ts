@@ -40,6 +40,7 @@ export const api = {
   session: () => request<{ session: string; connections: number }>('/session'),
   health: () => request<Health>('/health'),
   cameras: () => request<Cameras>('/cameras'),
+  history: () => request<JudgeRecord[]>('/history'),
   resetStats: () => request<{ stats: Stats }>('/stats/reset', { method: 'POST' }),
 }
 

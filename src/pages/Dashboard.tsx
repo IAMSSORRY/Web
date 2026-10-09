@@ -3,6 +3,7 @@ import DashboardHeader from '../components/DashboardHeader'
 import { useCameraStream } from '../hooks/useCameraStream'
 import { useJudgeStream, type LiveJudge } from '../hooks/useJudgeStream'
 import { api, type Cameras, type Grade } from '../lib/api'
+import { countJudges, loadJudges, saveJudges } from '../lib/localdb'
 
 const POLL_MS = 2000
 
@@ -281,10 +282,58 @@ function HistoryCard({ recent }: { recent: LiveJudge[] }) {
   )
 }
 
+async function downloadCsv() {
+  const rows = await loadJudges()
+  const header = ['id', 'time', 'grade', 'confidence', 'v_value', 'threshold', 'roll_detected', 'cam']
+  const lines = rows.map((r) =>
+    [r.id, new Date(r.ts * 1000).toISOString(), r.grade, r.confidence, r.v_value ?? '', r.threshold ?? '', r.roll_detected ?? '', r.cam ?? ''].join(','),
+  )
+  // 엑셀에서 한글이 깨지지 않게 BOM 을 붙인다.
+  const blob = new Blob(['\uFEFF' + [header.join(','), ...lines].join('\n')], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `ssorry-judges-${new Date().toISOString().slice(0, 10)}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+function LocalArchiveCard({ version }: { version: number }) {
+  const [count, setCount] = useState<number | null>(null)
+  const [error, setError] = useState(false)
+
+  useEffect(() => {
+    countJudges()
+      .then((n) => (setCount(n), setError(false)))
+      .catch(() => setError(true))
+  }, [version])
+
+  return (
+    <Card title="브라우저 저장 기록">
+      <div className="flex items-center justify-between gap-6 px-5 pb-6 pt-4">
+        <p className="text-info">
+          {error
+            ? '이 브라우저에서는 기록을 저장할 수 없습니다 (시크릿 창이거나 저장소가 막혀 있습니다)'
+            : `이 브라우저에 판정 ${count ?? 0}개가 저장되어 있습니다. 통계를 초기화하거나 서버가 재시작되어도 남습니다.`}
+        </p>
+        <button
+          onClick={() => downloadCsv()}
+          disabled={!count}
+          className="shrink-0 rounded-full bg-border px-5 py-1.5 text-sm font-semibold hover:bg-divider disabled:opacity-40"
+        >
+          CSV 내려받기
+        </button>
+      </div>
+    </Card>
+  )
+}
+
 export default function Dashboard() {
   const judge = useJudgeStream()
   const cameras = useCameras()
   const [resetting, setResetting] = useState(false)
+  const [confirming, setConfirming] = useState(false)
+  const [resetError, setResetError] = useState<string | null>(null)
 
 
   const latest = judge.recent[0]
@@ -297,9 +346,18 @@ export default function Dashboard() {
 
   const onReset = async () => {
     setResetting(true)
-    // 성공하면 서버가 모든 /ws/judge 에 새 snapshot 을 보내므로 화면은 그걸로 바뀐다.
-    await api.resetStats().catch(() => {})
-    setResetting(false)
+    setResetError(null)
+    try {
+      // 서버 이력을 브라우저 DB 에 먼저 백업하고, 성공했을 때만 초기화한다.
+      await saveJudges(await api.history())
+      await api.resetStats()
+      // 성공하면 서버가 모든 /ws/judge 에 새 snapshot 을 보내므로 화면은 그걸로 바뀐다.
+    } catch (e) {
+      setResetError(`초기화하지 않았습니다: ${(e as Error).message}`)
+    } finally {
+      setResetting(false)
+      setConfirming(false)
+    }
   }
 
   return (
@@ -318,13 +376,35 @@ export default function Dashboard() {
           id="stats"
           title="통계"
           right={
-            <button
-              onClick={onReset}
-              disabled={resetting}
-              className="rounded-full bg-border px-5 py-1.5 text-sm font-semibold hover:bg-divider disabled:opacity-40"
-            >
-              통계 초기화
-            </button>
+            <div className="flex items-center gap-2 text-sm">
+              {resetError && <span className="text-grade-low">{resetError}</span>}
+              {confirming ? (
+                <>
+                  <span className="text-info">기록을 브라우저에 백업한 뒤 초기화합니다</span>
+                  <button
+                    onClick={() => setConfirming(false)}
+                    disabled={resetting}
+                    className="rounded-full px-4 py-1.5 text-info hover:bg-border"
+                  >
+                    취소
+                  </button>
+                  <button
+                    onClick={onReset}
+                    disabled={resetting}
+                    className="rounded-full bg-grade-low px-5 py-1.5 font-semibold text-black disabled:opacity-40"
+                  >
+                    {resetting ? '백업 중' : '초기화'}
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={() => setConfirming(true)}
+                  className="rounded-full bg-border px-5 py-1.5 font-semibold hover:bg-divider"
+                >
+                  통계 초기화
+                </button>
+              )}
+            </div>
           }
         >
           <div className="grid grid-cols-[519fr_302fr_435fr] gap-6">
@@ -334,7 +414,10 @@ export default function Dashboard() {
         </Section>
 
         <Section id="analysis" title="분석">
-          <HistoryCard recent={judge.recent} />
+          <div className="flex flex-col gap-6">
+            <HistoryCard recent={judge.recent} />
+            <LocalArchiveCard version={judge.savedVersion} />
+          </div>
         </Section>
       </div>
     </>

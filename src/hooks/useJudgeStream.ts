@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api, wsUrl, type JudgeMessage, type JudgeRecord, type Stats } from '../lib/api'
+import { saveJudges } from '../lib/localdb'
 
 export type Bbox = [number, number, number, number]
 export type Motion = Extract<JudgeMessage, { type: 'motion' }>
@@ -16,6 +17,8 @@ export function useJudgeStream() {
   // 최신 판정이 앞에 온다.
   const [recent, setRecent] = useState<LiveJudge[]>([])
   const [motion, setMotion] = useState<Motion | null>(null)
+  // 브라우저 DB 에 저장된 판정 수. 저장이 끝날 때마다 바뀐다.
+  const [savedVersion, setSavedVersion] = useState(0)
   const [activeBox, setActiveBox] = useState<{ bbox: Bbox; grade: JudgeRecord['grade']; cam: string } | null>(null)
 
   useEffect(() => {
@@ -23,6 +26,13 @@ export function useJudgeStream() {
     let retry: ReturnType<typeof setTimeout> | undefined
     let disposed = false
     let boxTimer: ReturnType<typeof setTimeout> | undefined
+    // 모션의 굴림 결과를 반영해 다시 저장하려고 마지막 판정을 들고 있는다.
+    let lastJudge: LiveJudge | null = null
+
+    const persist = (records: LiveJudge[]) =>
+      saveJudges(records)
+        .then(() => setSavedVersion((v) => v + 1))
+        .catch((e) => console.error('[localdb] 판정 저장 실패', e))
 
     const onMessage = (msg: JudgeMessage) => {
       switch (msg.type) {
@@ -31,11 +41,16 @@ export function useJudgeStream() {
           setCycleTime(msg.cycle_time)
           setRecent([...msg.recent].reverse())
           setMotion(null)
+          lastJudge = msg.recent.at(-1) ?? null
+          // snapshot 의 recent 는 일부라서, 서버가 들고 있는 이력 전체를 받아 저장한다.
+          api.history().then(persist).catch(() => persist(msg.recent))
           break
         case 'judge': {
           const { id, grade, confidence, v_value, threshold, ts, bbox, cam } = msg
           const judge: LiveJudge = { id, grade, confidence, v_value, threshold, ts, bbox, cam, roll_detected: null }
           setRecent((prev) => [judge, ...prev].slice(0, MAX_RECENT))
+          lastJudge = judge
+          persist([judge])
           setActiveBox({ bbox, grade, cam })
           clearTimeout(boxTimer)
           boxTimer = setTimeout(() => setActiveBox(null), BOX_VISIBLE_MS)
@@ -51,6 +66,10 @@ export function useJudgeStream() {
           setRecent((prev) =>
             prev.length ? [{ ...prev[0], roll_detected: msg.roll_detected }, ...prev.slice(1)] : prev,
           )
+          if (lastJudge) {
+            lastJudge = { ...lastJudge, roll_detected: msg.roll_detected }
+            persist([lastJudge])
+          }
           break
       }
     }
@@ -80,5 +99,5 @@ export function useJudgeStream() {
     }
   }, [])
 
-  return { connected, stats, cycleTime, recent, motion, activeBox }
+  return { connected, stats, cycleTime, recent, motion, activeBox, savedVersion }
 }

@@ -40,7 +40,7 @@ export default function Footer() {
           <p className="font-light text-sm text-white/60">대구소프트웨어마이스터고등학교</p>
         </div>
         
-        <p className="font-light text-sm text-white/60">ROS2 · Python · OpenCV · React · TypeScript</p>
+        <p className="font-light text-sm text-white/60">PIPER STUDIO · Python · OpenCV · React · TypeScript</p>
 
         <p className="font-light text-sm text-white/60">© 2026 암쏘사과</p>
       </div>
