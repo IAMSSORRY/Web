@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import DashboardHeader, { type Connection } from '../components/DashboardHeader'
 import Toaster from '../components/Toaster'
-import { useCameraStream } from '../hooks/useCameraStream'
+import { useCameraStream, type Detection } from '../hooks/useCameraStream'
 import { useJudgeStream, type LiveJudge } from '../hooks/useJudgeStream'
 import { api, exportCsvUrl, type Advice, type ArmStatus, type Cameras, type MissionEvent, type MissionPhase, type MissionState, type RobotState, type ControlStatus, type Grade, type Run, type Stats } from '../lib/api'
 import { downloadServerCsv, formatTs, saveCsv } from '../lib/csv'
+import { detectApples } from '../lib/detect'
 import { polite } from '../lib/polite'
 import { toast } from '../lib/toast'
 import { countJudges, loadJudges, saveJudges } from '../lib/localdb'
@@ -139,6 +140,9 @@ function Unavailable({ text, detail, alert = false }: { text: string; detail?: s
 
 type ActiveBox = ReturnType<typeof useJudgeStream>['activeBox']
 
+// 브라우저 색 검출 주기(ms)
+const LOCAL_DETECT_MS = 150
+
 // 고정 카메라(top)만 보여준다.
 const CAM = 'top'
 
@@ -148,6 +152,10 @@ function VideoCard({ box }: { box: ActiveBox }) {
   // bbox 는 판정한 카메라의 JPEG 픽셀 좌표라서 그 카메라에만 그린다.
   // 다운 동안에는 배경 영상이 없으므로 박스도 숨긴다.
   const shownBox = box?.cam === CAM && !camera.down ? box : null
+  // 비전 서버가 보낸 박스가 있으면 그걸, 없으면 브라우저가 색으로 찾은 박스를 그린다.
+  const [localBoxes, setLocalBoxes] = useState<Detection[]>([])
+  const lastDetectAt = useRef(0)
+  const liveBoxes = camera.detections.length ? camera.detections : localBoxes
   const hasFrame = camera.frameUrl !== null
 
   return (
@@ -170,11 +178,17 @@ function VideoCard({ box }: { box: ActiveBox }) {
             onLoad={(e) => {
               const { naturalWidth: w, naturalHeight: h } = e.currentTarget
               if (w !== natural.w || h !== natural.h) setNatural({ w, h })
+              // 프레임마다 돌리면 무거우니 약 150ms 에 한 번만 찾는다. 서버 박스가 오면 건너뛴다.
+              const now = performance.now()
+              if (!camera.detections.length && now - lastDetectAt.current > LOCAL_DETECT_MS) {
+                lastDetectAt.current = now
+                setLocalBoxes(detectApples(e.currentTarget))
+              }
             }}
           />
           {/* 비전이 프레임마다 보내는 실시간 박스. 판정 박스보다 얇게 그린다. */}
           {!camera.down &&
-            camera.detections.map((d, i) => (
+            liveBoxes.map((d, i) => (
               <div
                 key={i}
                 className={`absolute border ${d.grade ? gradeBorder[d.grade] : 'border-white/80'}`}
