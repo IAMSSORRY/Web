@@ -24,9 +24,11 @@ type Props = {
   onEstop: () => void
   // 정리 후 정지 중이면 비상정지 버튼을 더 눈에 띄게 한다(정리를 버리고 즉시 멈출 수 있다).
   emphasizeEstop: boolean
+  // 로봇 미션 프로그램에 닿지 못하면 웹 비상정지가 로봇까지 가지 않는다. 버튼은 막지 않고(다시 연결되면 바로 써야 하므로) 알리기만 한다.
+  robotOffline: boolean
 }
 
-export default function DashboardHeader({ connection, state, detail, onEstop, emphasizeEstop }: Props) {
+export default function DashboardHeader({ connection, state, detail, onEstop, emphasizeEstop, robotOffline }: Props) {
   return (
     <header className="fixed top-0 left-0 right-0 z-50 h-header px-4 lg:px-20 flex items-center justify-between gap-3 bg-main-2/50 border-b border-border shadow-[0_0_20px_rgba(0,0,0,0.3)] backdrop-blur-xl">
       <Link to={paths.landing}>
@@ -53,11 +55,13 @@ export default function DashboardHeader({ connection, state, detail, onEstop, em
       {/* 비상 상황용이라 확인 없이 바로 보낸다. 응답을 기다리는 동안에도 다시 누를 수 있다. */}
       <button
         onClick={onEstop}
+        title={robotOffline ? '로봇 미션 프로그램에 연결되지 않아 웹 비상정지가 로봇에 전달되지 않습니다. 로봇 PC 에서 직접 멈추세요.' : undefined}
         className={`h-8 shrink-0 rounded-full bg-grade-low px-4 text-sm font-semibold text-white hover:brightness-110 active:brightness-90 lg:px-5 lg:text-base ${
           emphasizeEstop ? 'animate-pulse ring-4 ring-grade-low/50' : ''
         }`}
       >
         비상정지
+        {robotOffline && <span className="ml-1 text-xs font-normal opacity-80">(연결 끊김)</span>}
       </button>
       </div>
     </header>

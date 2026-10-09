@@ -1008,7 +1008,7 @@ export default function Dashboard() {
       if (autoReason) toast('error', '10초 넘게 이상이 이어져 비상정지했습니다', autoReason)
       else toast('error', '비상정지했습니다')
     } catch (e) {
-      toast('error', '비상정지를 보내지 못했습니다', polite((e as Error).message))
+      toast('error', '비상정지가 로봇에 전달되지 않았습니다', `${polite((e as Error).message)} — 로봇 PC 에서 직접 멈추세요`)
     }
   }
 
@@ -1067,7 +1067,7 @@ export default function Dashboard() {
 
   return (
     <>
-      <DashboardHeader connection={connection} state={state} detail={detail} onEstop={() => sendEstop()} emphasizeEstop={robotState === 'stopping'} />
+      <DashboardHeader connection={connection} state={state} detail={detail} onEstop={() => sendEstop()} emphasizeEstop={robotState === 'stopping'} robotOffline={control === null} />
       <Toaster />
       <EstopOverlay reasons={issues?.filter((i) => i.estop) ?? []} robotReachable={control !== null} />
       <div className="flex flex-col gap-8 p-4 lg:gap-10 lg:p-20">
