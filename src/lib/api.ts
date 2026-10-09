@@ -20,13 +20,22 @@ export type JudgeRecord = {
   threshold: number | null
   ts: number
   roll_detected: boolean | null
-  // 흠(어두운 영역) 비율. 서버가 보낼 때만 있다. dark_ratio <= dark_max 여야 상이다.
-  extra?: { dark_ratio: number; dark_max: number } | null
+  // 판정 근거 (서버가 보낼 때만). dark_ratio <= dark_max(흠), bruise_ratio <= bruise_max(멍) 여야 상이다.
+  // red_low: 빨강 비율이 이보다 낮으면 하. reasons: 상이 아닌 이유 목록 (상이면 빈 목록).
+  extra?: {
+    dark_ratio: number
+    dark_max: number
+    bruise_ratio?: number | null
+    bruise_max?: number | null
+    red_low?: number
+    reasons?: string[]
+  } | null
 }
 
 // stalled: 진행 중이었는데 로봇 소식이 끊김. 이벤트가 다시 오면 서버가 running 으로 되돌린다.
 export type MissionStatus = 'idle' | 'running' | 'stalled' | 'finished' | 'estop'
-export type MissionPhase = 'pick' | 'inspect' | 'place' | 'home'
+// nudge: 벽에 붙은 사과를 가운데로 굴리는 중, estop_return / estop_rest: 비상정지 때 사과 되돌리기 / 팔 내리기
+export type MissionPhase = 'pick' | 'inspect' | 'place' | 'home' | 'nudge' | 'estop_return' | 'estop_rest'
 
 export type MissionState = {
   status: MissionStatus
