@@ -16,8 +16,6 @@ const gradeBorder: Record<Grade, string> = {
   중: 'border-grade-mid',
 }
 
-const camLabel: Record<string, string> = { top: '고정', wrist: '손목' }
-
 const timeFmt = new Intl.DateTimeFormat('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
 const fmtTime = (ts: number) => timeFmt.format(ts * 1000)
 const pct = (n: number) => `${(n * 100).toFixed(1)}%`
@@ -83,15 +81,16 @@ type ActiveBox = ReturnType<typeof useJudgeStream>['activeBox']
 
 const CARD_RATIO = 628 / 330
 
-function VideoCard({ cams, live, box }: { cams: string[]; live: (name: string) => boolean | undefined; box: ActiveBox }) {
-  const [cam, setCam] = useState(cams[0])
-  const current = cams.includes(cam) ? cam : cams[0]
-  const camera = useCameraStream(current)
+// 고정 카메라(top)만 보여준다.
+const CAM = 'top'
+
+function VideoCard({ live, box }: { live: boolean | undefined; box: ActiveBox }) {
+  const camera = useCameraStream(CAM)
   const [natural, setNatural] = useState({ w: 640, h: 480 })
   // bbox 는 판정한 카메라의 JPEG 픽셀 좌표라서 그 카메라에만 그린다.
-  const shownBox = box?.cam === current ? box : null
+  const shownBox = box?.cam === CAM ? box : null
   const ratio = natural.w / natural.h
-  const hasFrame = camera.frameUrl !== null && live(current) !== false
+  const hasFrame = camera.frameUrl !== null && live !== false
 
   return (
     <Card className="h-[330px]">
@@ -135,21 +134,8 @@ function VideoCard({ cams, live, box }: { cams: string[]; live: (name: string) =
         <Unavailable text={camera.status === 'open' ? '카메라 연결 대기 중' : '영상을 불러올수 없습니다'} />
       )}
 
-      <div className="relative flex items-center justify-between px-5 pt-6">
+      <div className="relative px-5 pt-6">
         <h3 className="text-xl font-semibold [text-shadow:0_0_4px_rgba(0,0,0,0.5)]">실시간 영상</h3>
-        {cams.length > 1 && (
-          <div className="flex gap-1 rounded-full bg-main-1/70 p-1 text-sm backdrop-blur">
-            {cams.map((name) => (
-              <button
-                key={name}
-                onClick={() => setCam(name)}
-                className={`rounded-full px-3 py-1 ${name === current ? 'bg-border font-semibold' : 'text-info'}`}
-              >
-                {camLabel[name] ?? name}
-              </button>
-            ))}
-          </div>
-        )}
       </div>
     </Card>
   )
@@ -288,8 +274,7 @@ export default function Dashboard() {
   const cameras = useCameras()
   const [resetting, setResetting] = useState(false)
 
-  const cams = cameras ? [cameras.default, ...cameras.cameras.map((c) => c.name).filter((n) => n !== cameras.default)] : ['top']
-  const isLive = (name: string) => cameras?.cameras.find((c) => c.name === name)?.live
+  const topLive = cameras?.cameras.find((c) => c.name === CAM)?.live
 
   const latest = judge.recent[0]
   const average = judge.recent.length
@@ -312,7 +297,7 @@ export default function Dashboard() {
       <div className="flex flex-col gap-10 p-20">
         <Section id="realtime" title="실시간">
           <div className="grid grid-cols-[628fr_302fr_302fr] gap-6">
-            <VideoCard cams={cams} live={isLive} box={judge.activeBox} />
+            <VideoCard live={topLive} box={judge.activeBox} />
             <AppleInfoCard judge={latest} />
             <ConfidenceCard average={average} />
           </div>

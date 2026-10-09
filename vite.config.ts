@@ -6,7 +6,9 @@ import tailwindcss from '@tailwindcss/vite'
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
-  // FastAPI 서버 주소. 세션 쿠키를 웹소켓까지 그대로 쓰려면 같은 출처여야 해서 프록시로 붙인다.
+  // 백엔드 주소. 다른 PC 의 서버에 붙을 때는 .env.local 에 API_TARGET=http://<서버IP>:8000.
+  // 세션 쿠키가 SameSite=Lax 라서 브라우저가 서버 IP 를 직접 부르면 쿠키가 안 붙는다.
+  // 그래서 브라우저는 항상 개발 서버(localhost)와만 통신하고, 프록시가 서버로 넘긴다.
   const target = env.API_TARGET ?? 'http://localhost:8000'
 
   return {
