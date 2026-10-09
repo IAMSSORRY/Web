@@ -7,12 +7,23 @@ const nav = [
   { href: '#analysis', label: '분석' },
 ]
 
-type Props = {
-  connected: boolean
-  state: string
+// ok: 전부 정상, warn: 서버는 살아 있지만 카메라나 판정 스트림이 끊김, down: 서버 응답 없음
+export type Connection = 'ok' | 'warn' | 'down'
+
+const dotColor: Record<Connection, string> = {
+  ok: 'bg-grade-high',
+  warn: 'bg-grade-mid',
+  down: 'bg-grade-low',
 }
 
-export default function DashboardHeader({ connected, state }: Props) {
+type Props = {
+  connection: Connection
+  state: string
+  // 마우스를 올리면 보이는 원인 설명
+  detail?: string
+}
+
+export default function DashboardHeader({ connection, state, detail }: Props) {
   return (
     <header className="fixed top-0 left-0 right-0 z-50 h-header px-20 flex items-center justify-between bg-main-3 border-b border-divider shadow-card">
       <Link to={paths.landing}>
@@ -27,12 +38,12 @@ export default function DashboardHeader({ connected, state }: Props) {
         ))}
       </nav>
 
-      <div className="flex h-8 items-center gap-2 rounded-full bg-border px-5">
+      <div title={detail} className="flex h-8 items-center gap-2 rounded-full bg-border px-5">
         <span className="font-semibold">연결상태</span>
-        <span className={`size-2.5 rounded-full ${connected ? 'bg-grade-high' : 'bg-grade-low'}`} />
+        <span className={`size-2.5 rounded-full transition-colors ${dotColor[connection]}`} />
         <span className="h-5 w-px bg-info" />
         <span className="font-semibold">상태</span>
-        <span className="text-info">{state}</span>
+        <span className={connection === 'ok' ? 'text-info' : 'text-white'}>{state}</span>
       </div>
     </header>
   )

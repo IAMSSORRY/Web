@@ -2,7 +2,10 @@
 // 개발 때는 vite.config.ts 의 프록시가 FastAPI 로 넘긴다.
 
 export type Health = { status: string; camera_source: string; cameras: string[] }
-export type Cameras = { default: string; cameras: { name: string; live: boolean }[] }
+export type Cameras = {
+  default: string
+  cameras: { name: string; live: boolean; last_frame_age: number | null; error: string | null }[]
+}
 
 export type Grade = '상' | '중'
 export type Stats = { 상: number; 중: number; total: number }

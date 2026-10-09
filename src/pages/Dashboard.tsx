@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import DashboardHeader from '../components/DashboardHeader'
+import DashboardHeader, { type Connection } from '../components/DashboardHeader'
 import { useCameraStream } from '../hooks/useCameraStream'
 import { useJudgeStream, type LiveJudge } from '../hooks/useJudgeStream'
 import { api, exportCsvUrl, type Cameras, type Grade, type Run } from '../lib/api'
@@ -84,8 +84,6 @@ function Unavailable({ text, detail, alert = false }: { text: string; detail?: s
 
 type ActiveBox = ReturnType<typeof useJudgeStream>['activeBox']
 
-const CARD_RATIO = 628 / 330
-
 // 고정 카메라(top)만 보여준다.
 const CAM = 'top'
 
@@ -95,11 +93,10 @@ function VideoCard({ box }: { box: ActiveBox }) {
   // bbox 는 판정한 카메라의 JPEG 픽셀 좌표라서 그 카메라에만 그린다.
   // 다운 동안에는 배경 영상이 없으므로 박스도 숨긴다.
   const shownBox = box?.cam === CAM && !camera.down ? box : null
-  const ratio = natural.w / natural.h
   const hasFrame = camera.frameUrl !== null
 
   return (
-    <Card className="h-[330px]">
+    <Card className="h-[330px] [container-type:size]">
       {hasFrame && (
         // 카드를 꽉 채우도록(cover) 프레임 비율 그대로 키우고 넘치는 쪽은 잘라낸다.
         // 프레임과 같은 비율의 박스 안에서 그리므로 bbox 는 퍼센트로 그대로 얹힌다.
@@ -107,7 +104,8 @@ function VideoCard({ box }: { box: ActiveBox }) {
           className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
           style={{
             aspectRatio: `${natural.w} / ${natural.h}`,
-            ...(ratio < CARD_RATIO ? { width: '100%' } : { height: '100%' }),
+            // 실제 카드 크기(cq 단위)를 기준으로, 가로와 세로 중 더 크게 필요한 쪽에 맞춘다.
+            width: `max(100cqw, calc(100cqh * ${natural.w / natural.h}))`,
           }}
         >
           <img
@@ -407,8 +405,16 @@ export default function Dashboard() {
     ? judge.recent.reduce((sum, r) => sum + r.confidence, 0) / judge.recent.length
     : null
 
-  const connected = cameras !== null && judge.connected
-  const state = !connected ? '연결 끊김' : judge.activeBox ? '판별 중' : '대기 중'
+  // 헤더 연결상태. 화면에 쓰는 고정 카메라만 본다.
+  const topCam = cameras?.cameras.find((c) => c.name === CAM)
+  const [connection, state, detail]: [Connection, string, string | undefined] =
+    cameras === null
+      ? ['down', '서버 연결 끊김', '백엔드 서버가 응답하지 않습니다']
+      : !judge.connected
+        ? ['warn', '판정 연결 끊김', '판정 스트림(/ws/judge)에 다시 연결하는 중입니다']
+        : !topCam?.live
+          ? ['warn', '카메라 끊김', topCam?.error ?? '고정 카메라에서 프레임이 들어오지 않습니다']
+          : ['ok', judge.activeBox ? '판별 중' : '대기 중', undefined]
 
   const onReset = async () => {
     setResetting(true)
@@ -432,7 +438,7 @@ export default function Dashboard() {
 
   return (
     <>
-      <DashboardHeader connected={connected} state={state} />
+      <DashboardHeader connection={connection} state={state} detail={detail} />
       <div className="flex flex-col gap-10 p-20">
         <Section id="realtime" title="실시간">
           <div className="grid grid-cols-[628fr_302fr_302fr] gap-6">
