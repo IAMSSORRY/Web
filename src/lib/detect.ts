@@ -5,8 +5,11 @@ import type { Detection } from '../hooks/useCameraStream'
 
 // 계산은 줄인 프레임에서 한다. 폭 160px 이면 프레임당 수 ms 다.
 const WORK_WIDTH = 160
-// 사과로 볼 최소 크기(줄인 프레임 넓이 대비 비율)와 가로세로 비율 범위
-const MIN_AREA_RATIO = 0.002
+// 사과로 볼 최소 크기(줄인 프레임 넓이 대비 비율). 사과 하나는 보통 80~90칸이고,
+// 화면 끝에 조금만 걸친 사과(약 14칸)까지 잡도록 낮게 둔다.
+const MIN_AREA_RATIO = 0.0006
+// 박스를 사방으로 넓힐 칸 수. 사과 가장자리는 그림자와 섞여 빠지기 쉬워서 살짝 키운다.
+const PAD = 1
 // 사과는 거의 둥글어서 길쭉한 덩어리(손, 팔 조각)는 뺀다.
 const MAX_ASPECT = 1.6
 
@@ -89,11 +92,18 @@ export function detectApples(img: HTMLImageElement): Detection[] {
       }
     }
 
+    if (area < minArea) continue
+    // 화면 끝에 걸쳐 잘린 사과는 길쭉해 보이므로 비율 검사를 하지 않는다.
+    const onEdge = minX === 0 || minY === 0 || maxX === w - 1 || maxY === h - 1
     const bw = maxX - minX + 1
     const bh = maxY - minY + 1
-    if (area < minArea) continue
-    if (bw / bh > MAX_ASPECT || bh / bw > MAX_ASPECT) continue
-    boxes.push({ bbox: [minX * scaleX, minY * scaleY, bw * scaleX, bh * scaleY] })
+    if (!onEdge && (bw / bh > MAX_ASPECT || bh / bw > MAX_ASPECT)) continue
+
+    const x0 = Math.max(0, minX - PAD)
+    const y0 = Math.max(0, minY - PAD)
+    const x1 = Math.min(w - 1, maxX + PAD)
+    const y1 = Math.min(h - 1, maxY + PAD)
+    boxes.push({ bbox: [x0 * scaleX, y0 * scaleY, (x1 - x0 + 1) * scaleX, (y1 - y0 + 1) * scaleY] })
   }
 
   return boxes
