@@ -7,9 +7,9 @@ export type Cameras = {
   cameras: { name: string; live: boolean; last_frame_age: number | null; error: string | null }[]
 }
 
-export type Grade = '상' | '중'
-// 하 등급은 아직 서버가 판정하지 않아 키가 없을 수 있다.
-export type Stats = { 상: number; 중: number; 하?: number; total: number }
+export type Grade = '상' | '중' | '하'
+// 서버는 아직 없는 등급도 0 으로 넣어 항상 세 등급 키를 모두 보낸다.
+export type Stats = { 상: number; 중: number; 하: number; total: number }
 
 export type JudgeRecord = {
   id: number

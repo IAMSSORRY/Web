@@ -3,7 +3,7 @@ import DashboardHeader, { type Connection } from '../components/DashboardHeader'
 import Toaster from '../components/Toaster'
 import { useCameraStream } from '../hooks/useCameraStream'
 import { useJudgeStream, type LiveJudge } from '../hooks/useJudgeStream'
-import { api, exportCsvUrl, type ArmStatus, type Cameras, type MissionEvent, type MissionPhase, type MissionState, type Grade, type Run } from '../lib/api'
+import { api, exportCsvUrl, type ArmStatus, type Cameras, type MissionEvent, type MissionPhase, type MissionState, type Grade, type Run, type Stats } from '../lib/api'
 import { downloadServerCsv, formatTs, saveCsv } from '../lib/csv'
 import { polite } from '../lib/polite'
 import { toast } from '../lib/toast'
@@ -11,7 +11,7 @@ import { countJudges, loadJudges, saveJudges } from '../lib/localdb'
 
 const POLL_MS = 2000
 
-const gradeText: Record<Grade | '하', string> = {
+const gradeText: Record<Grade, string> = {
   상: 'text-grade-high',
   중: 'text-grade-mid',
   하: 'text-grade-low',
@@ -19,6 +19,7 @@ const gradeText: Record<Grade | '하', string> = {
 const gradeBorder: Record<Grade, string> = {
   상: 'border-grade-high',
   중: 'border-grade-mid',
+  하: 'border-grade-low',
 }
 
 const timeFmt = new Intl.DateTimeFormat('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
@@ -433,9 +434,8 @@ function ConfidenceCard({ average }: { average: number | null }) {
   )
 }
 
-function GradeCountCard({ stats }: { stats: Record<string, number> }) {
-  // 디자인에는 하 등급이 있지만 서버는 아직 상/중만 판정한다.
-  const grades = ['상', '중', '하'] as const
+function GradeCountCard({ stats }: { stats: Stats }) {
+  const grades: Grade[] = ['상', '중', '하']
 
   return (
     <Card title="등급별 사과 개수" right={<span className="text-[15px] text-info">단위: 개</span>} className="h-[280px]">
@@ -443,7 +443,7 @@ function GradeCountCard({ stats }: { stats: Record<string, number> }) {
         {grades.map((g) => (
           <div key={g} className="flex w-30 flex-col items-center gap-8">
             <span className="text-[32px] font-semibold text-info">{g}</span>
-            <span className={`text-5xl font-bold tabular-nums ${gradeText[g]}`}>{stats[g] ?? 0}</span>
+            <span className={`text-5xl font-bold tabular-nums ${gradeText[g]}`}>{stats[g]}</span>
           </div>
         ))}
       </div>
@@ -567,7 +567,7 @@ function RunsCard({ refreshKey }: { refreshKey: string }) {
                   <td>{r.ended_at ? dateTimeFmt.format(r.ended_at * 1000) : <span className="text-grade-high">진행 중</span>}</td>
                   <td className="text-grade-high">{r.stats.상}</td>
                   <td className="text-grade-mid">{r.stats.중}</td>
-                  <td className="text-grade-low">{r.stats.하 ?? 0}</td>
+                  <td className="text-grade-low">{r.stats.하}</td>
                   <td>{r.stats.total}</td>
                   <td className="text-right">
                     <button onClick={() => downloadRunCsv(r.id)} className="text-sm text-info underline-offset-4 hover:underline">

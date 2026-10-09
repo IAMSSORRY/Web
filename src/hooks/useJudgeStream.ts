@@ -13,7 +13,7 @@ const BOX_VISIBLE_MS = 2500
 
 export function useJudgeStream() {
   const [connected, setConnected] = useState(false)
-  const [stats, setStats] = useState<Stats>({ 상: 0, 중: 0, total: 0 })
+  const [stats, setStats] = useState<Stats>({ 상: 0, 중: 0, 하: 0, total: 0 })
   const [cycleTime, setCycleTime] = useState<number | null>(null)
   // 최신 판정이 앞에 온다.
   const [recent, setRecent] = useState<LiveJudge[]>([])
