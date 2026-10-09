@@ -90,8 +90,13 @@ export const api = {
   // 최신 회차가 앞에 온다.
   runs: () => request<Run[]>('/runs'),
   resetStats: () => request<{ stats: Stats }>('/stats/reset', { method: 'POST' }),
-  // 비상정지 해제. 서버 API 가 만들어지는 중이라 주소가 바뀌면 여기만 고친다.
-  clearEstop: () => request<unknown>('/mission/estop/clear', { method: 'POST' }),
+  // 비상정지(또는 오류 정지) 해제 → 로봇이 멈춘 사과부터 이어서 한다. 모터를 다시 켜느라 몇 초 걸린다.
+  // 지금 할 수 없는 상태면 200 에 {ok:false, error} 로 오므로 본문도 확인한다.
+  clearEstop: async () => {
+    const data = await request<{ ok?: boolean; error?: string }>('/control/resume', { method: 'POST' })
+    if (data.ok === false) throw new Error(data.error ?? '로봇이 해제를 거부했습니다')
+    return data
+  },
 }
 
 // 회차를 빼면 전체 회차

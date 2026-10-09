@@ -732,10 +732,10 @@ function EstopOverlay({ reasons }: { reasons: { key: string; detail: string }[] 
     setClearing(true)
     try {
       await api.clearEstop()
-      toast('success', '비상정지 해제를 요청했습니다', '원인이 남아 있으면 다시 비상정지됩니다')
+      toast('success', '비상정지를 해제했습니다', '멈춘 사과부터 이어서 진행합니다')
       setDismissedKey(key)
     } catch (e) {
-      toast('error', '비상정지를 해제하지 못했습니다', (e as Error).message)
+      toast('error', '비상정지를 해제하지 못했습니다', polite((e as Error).message))
     } finally {
       setClearing(false)
     }
