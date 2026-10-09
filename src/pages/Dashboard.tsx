@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import DashboardHeader, { type Connection } from '../components/DashboardHeader'
+import Toaster from '../components/Toaster'
 import { useCameraStream } from '../hooks/useCameraStream'
 import { useJudgeStream, type LiveJudge } from '../hooks/useJudgeStream'
 import { api, exportCsvUrl, type ArmStatus, type Cameras, type Grade, type Run } from '../lib/api'
+import { toast } from '../lib/toast'
 import { countJudges, loadJudges, saveJudges } from '../lib/localdb'
 
 const POLL_MS = 2000
@@ -22,8 +24,9 @@ const fmtTime = (ts: number) => timeFmt.format(ts * 1000)
 const pct = (n: number) => `${(n * 100).toFixed(1)}%`
 
 // /cameras 응답으로 카메라 목록과 카메라별 프레임 수신 여부를 본다.
+// undefined: 아직 첫 응답 전, null: 서버 응답 없음
 function useCameras() {
-  const [cameras, setCameras] = useState<Cameras | null>(null)
+  const [cameras, setCameras] = useState<Cameras | null | undefined>(undefined)
 
   useEffect(() => {
     let alive = true
@@ -425,6 +428,35 @@ function LocalArchiveCard({ version }: { version: number }) {
   )
 }
 
+// 페이지를 막 연 뒤에는 웹소켓이 붙는 중이라 상태가 잠깐 흔들린다. 그동안은 알리지 않는다.
+const TOAST_GRACE_MS = 3000
+
+// 연결상태가 바뀔 때만 알린다. 정상 안에서 판별 중/대기 중이 바뀌는 건 알리지 않는다.
+function useConnectionToasts(connection: Connection, state: string, detail: string | undefined) {
+  const key = connection === 'ok' ? 'ok' : state
+  const prev = useRef<string | null>(null)
+  const startedAt = useRef<number | null>(null)
+
+  useEffect(() => {
+    startedAt.current ??= Date.now()
+    const before = prev.current
+    prev.current = key
+    if (before === null || before === key || key === '연결 확인 중') return
+    if (Date.now() - startedAt.current < TOAST_GRACE_MS) return
+
+    if (key === 'ok') toast('success', '연결이 복구되었습니다', `${before} 상태가 해결되었습니다`)
+    else toast(connection === 'down' ? 'error' : 'warning', state, detail)
+  }, [key, connection, state, detail])
+}
+
+function useRollToast(motion: ReturnType<typeof useJudgeStream>['motion']) {
+  useEffect(() => {
+    if (motion?.roll_detected) {
+      toast('warning', '굴림이 감지되었습니다', '다음 동작의 접근 속도와 적재 높이를 낮춥니다')
+    }
+  }, [motion])
+}
+
 export default function Dashboard() {
   const judge = useJudgeStream()
   const cameras = useCameras()
@@ -443,15 +475,20 @@ export default function Dashboard() {
   // 헤더 연결상태. 화면에 쓰는 고정 카메라만 본다.
   const topCam = cameras?.cameras.find((c) => c.name === CAM)
   const [connection, state, detail]: [Connection, string, string | undefined] =
-    cameras === null
-      ? ['down', '서버 연결 끊김', '백엔드 서버가 응답하지 않습니다']
-      : armDown // 카메라가 살아 있어도 로봇팔이 죽으면 선별이 멈추므로 빨강으로 띄운다.
-        ? ['down', '로봇팔 문제', arm.message ?? '로봇팔 상태를 확인하세요']
-        : !judge.connected
-          ? ['warn', '판정 연결 끊김', '판정 스트림(/ws/judge)에 다시 연결하는 중입니다']
-          : !topCam?.live
-            ? ['warn', '카메라 끊김', topCam?.error ?? '고정 카메라에서 프레임이 들어오지 않습니다']
-            : ['ok', judge.activeBox ? '판별 중' : '대기 중', undefined]
+    cameras === undefined
+      ? ['warn', '연결 확인 중', undefined]
+      : cameras === null
+        ? ['down', '서버 연결 끊김', '백엔드 서버가 응답하지 않습니다']
+        : armDown // 카메라가 살아 있어도 로봇팔이 죽으면 선별이 멈추므로 빨강으로 띄운다.
+          ? ['down', '로봇팔 문제', arm.message ?? '로봇팔 상태를 확인하세요']
+          : !judge.connected
+            ? ['warn', '판정 연결 끊김', '판정 스트림(/ws/judge)에 다시 연결하는 중입니다']
+            : !topCam?.live
+              ? ['warn', '카메라 끊김', topCam?.error ?? '고정 카메라에서 프레임이 들어오지 않습니다']
+              : ['ok', judge.activeBox ? '판별 중' : '대기 중', undefined]
+
+  useConnectionToasts(connection, state, detail)
+  useRollToast(judge.motion)
 
   const onReset = async () => {
     setResetting(true)
@@ -465,8 +502,10 @@ export default function Dashboard() {
       await api.resetStats()
       // 성공하면 서버가 모든 /ws/judge 에 새 snapshot 을 보내므로 화면은 그걸로 바뀐다.
       setRunsKey((k) => k + 1)
+      toast('success', '새 회차를 시작했습니다', '이전 회차 기록은 분석 > 회차 기록에서 볼 수 있습니다')
     } catch (e) {
       setResetError(`새 회차를 시작하지 못했습니다: ${(e as Error).message}`)
+      toast('error', '새 회차를 시작하지 못했습니다', (e as Error).message)
     } finally {
       setResetting(false)
       setConfirming(false)
@@ -477,6 +516,7 @@ export default function Dashboard() {
     <>
       <DashboardHeader connection={connection} state={state} detail={detail} />
       {armDown && <ArmBanner message={arm.message} />}
+      <Toaster />
       <div className="flex flex-col gap-10 p-20">
         <Section id="realtime" title="실시간">
           <div className="grid grid-cols-[628fr_302fr_302fr] gap-6">
