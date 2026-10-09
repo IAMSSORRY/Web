@@ -21,6 +21,15 @@ export type JudgeRecord = {
   roll_detected: boolean | null
 }
 
+// ok 가 null 이면 서버가 로봇팔을 감시하지 않는 상태(source: "none")다.
+export type ArmStatus = {
+  source: string
+  ok: boolean | null
+  message: string | null
+  arms: { iface: string; role: string; connected: boolean; responding: boolean | null; state: string; ready: boolean; transport: string }[]
+  checked_at: number
+}
+
 export type Run = { id: number; started_at: number; ended_at: number | null; stats: Stats }
 
 export type StatsResponse = { stats: Stats; cycle_time: number | null; recent: JudgeRecord[] }
@@ -45,6 +54,7 @@ export const api = {
   session: () => request<{ session: string; connections: number }>('/session'),
   health: () => request<Health>('/health'),
   cameras: () => request<Cameras>('/cameras'),
+  arm: () => request<ArmStatus>('/arm'),
   history: () => request<JudgeRecord[]>('/history'),
   // 최신 회차가 앞에 온다.
   runs: () => request<Run[]>('/runs'),

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import DashboardHeader, { type Connection } from '../components/DashboardHeader'
 import { useCameraStream } from '../hooks/useCameraStream'
 import { useJudgeStream, type LiveJudge } from '../hooks/useJudgeStream'
-import { api, exportCsvUrl, type Cameras, type Grade, type Run } from '../lib/api'
+import { api, exportCsvUrl, type ArmStatus, type Cameras, type Grade, type Run } from '../lib/api'
 import { countJudges, loadJudges, saveJudges } from '../lib/localdb'
 
 const POLL_MS = 2000
@@ -41,6 +41,39 @@ function useCameras() {
   }, [])
 
   return cameras
+}
+
+const ARM_POLL_MS = 3000
+
+// 로봇팔 상태. 요청이 실패하면 서버 쪽 문제라서 여기서는 null 로 두고 서버 끊김으로 처리한다.
+function useArm() {
+  const [arm, setArm] = useState<ArmStatus | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    const tick = () =>
+      api
+        .arm()
+        .then((d) => alive && setArm(d))
+        .catch(() => alive && setArm(null))
+    tick()
+    const id = setInterval(tick, ARM_POLL_MS)
+    return () => {
+      alive = false
+      clearInterval(id)
+    }
+  }, [])
+
+  return arm
+}
+
+function ArmBanner({ message }: { message: string | null }) {
+  return (
+    <div role="alert" className="fixed top-header left-0 right-0 z-40 flex items-center gap-3 bg-grade-low px-20 py-3 font-semibold text-black">
+      <span>로봇팔 연결 끊김</span>
+      {message && <span className="font-normal">{message}</span>}
+    </div>
+  )
 }
 
 function Section({ id, title, right, children }: { id: string; title: string; right?: React.ReactNode; children: React.ReactNode }) {
@@ -395,6 +428,8 @@ function LocalArchiveCard({ version }: { version: number }) {
 export default function Dashboard() {
   const judge = useJudgeStream()
   const cameras = useCameras()
+  const arm = useArm()
+  const armDown = arm?.ok === false
   const [resetting, setResetting] = useState(false)
   const [confirming, setConfirming] = useState(false)
   const [resetError, setResetError] = useState<string | null>(null)
@@ -410,11 +445,13 @@ export default function Dashboard() {
   const [connection, state, detail]: [Connection, string, string | undefined] =
     cameras === null
       ? ['down', '서버 연결 끊김', '백엔드 서버가 응답하지 않습니다']
-      : !judge.connected
-        ? ['warn', '판정 연결 끊김', '판정 스트림(/ws/judge)에 다시 연결하는 중입니다']
-        : !topCam?.live
-          ? ['warn', '카메라 끊김', topCam?.error ?? '고정 카메라에서 프레임이 들어오지 않습니다']
-          : ['ok', judge.activeBox ? '판별 중' : '대기 중', undefined]
+      : armDown // 카메라가 살아 있어도 로봇팔이 죽으면 선별이 멈추므로 빨강으로 띄운다.
+        ? ['down', '로봇팔 문제', arm.message ?? '로봇팔 상태를 확인하세요']
+        : !judge.connected
+          ? ['warn', '판정 연결 끊김', '판정 스트림(/ws/judge)에 다시 연결하는 중입니다']
+          : !topCam?.live
+            ? ['warn', '카메라 끊김', topCam?.error ?? '고정 카메라에서 프레임이 들어오지 않습니다']
+            : ['ok', judge.activeBox ? '판별 중' : '대기 중', undefined]
 
   const onReset = async () => {
     setResetting(true)
@@ -439,6 +476,7 @@ export default function Dashboard() {
   return (
     <>
       <DashboardHeader connection={connection} state={state} detail={detail} />
+      {armDown && <ArmBanner message={arm.message} />}
       <div className="flex flex-col gap-10 p-20">
         <Section id="realtime" title="실시간">
           <div className="grid grid-cols-[628fr_302fr_302fr] gap-6">
