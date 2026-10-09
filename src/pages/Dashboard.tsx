@@ -4,6 +4,7 @@ import Toaster from '../components/Toaster'
 import { useCameraStream } from '../hooks/useCameraStream'
 import { useJudgeStream, type LiveJudge } from '../hooks/useJudgeStream'
 import { api, exportCsvUrl, type ArmStatus, type Cameras, type MissionEvent, type MissionPhase, type MissionState, type Grade, type Run } from '../lib/api'
+import { downloadServerCsv, formatTs, saveCsv } from '../lib/csv'
 import { polite } from '../lib/polite'
 import { toast } from '../lib/toast'
 import { countJudges, loadJudges, saveJudges } from '../lib/localdb'
@@ -481,19 +482,17 @@ function HistoryCard({ recent }: { recent: LiveJudge[] }) {
 
 async function downloadCsv() {
   const rows = await loadJudges()
-  const header = ['id', 'time', 'grade', 'confidence', 'v_value', 'threshold', 'dark_ratio', 'dark_max', 'roll_detected', 'cam']
+  const header = ['번호', '시각', '등급', '신뢰도', '빨강 비율', '빨강 기준', '흠 비율', '흠 기준', '굴림', '카메라']
+  const yesNo = (v: boolean | null) => (v === null ? '' : v ? '예' : '아니오')
   const lines = rows.map((r) =>
-    [r.id, new Date(r.ts * 1000).toISOString(), r.grade, r.confidence, r.v_value ?? '', r.threshold ?? '', r.extra?.dark_ratio ?? '', r.extra?.dark_max ?? '', r.roll_detected ?? '', r.cam ?? ''].join(','),
+    [r.id, formatTs(r.ts), r.grade, r.confidence, r.v_value ?? '', r.threshold ?? '', r.extra?.dark_ratio ?? '', r.extra?.dark_max ?? '', yesNo(r.roll_detected), r.cam ?? ''].join(','),
   )
-  // 엑셀에서 한글이 깨지지 않게 BOM 을 붙인다.
-  const blob = new Blob(['\uFEFF' + [header.join(','), ...lines].join('\n')], { type: 'text/csv;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `ssorry-judges-${new Date().toISOString().slice(0, 10)}.csv`
-  a.click()
-  URL.revokeObjectURL(url)
+  saveCsv([header.join(','), ...lines].join('\n'), `ssorry-browser-${formatTs(Date.now() / 1000).slice(0, 10)}.csv`)
 }
+
+// 서버 CSV 를 받아 시간 등을 읽기 좋게 바꿔 저장한다. 실패하면 알린다.
+const downloadRunCsv = (run?: number) =>
+  downloadServerCsv(exportCsvUrl(run)).catch((e: Error) => toast('error', 'CSV 를 내려받지 못했습니다', e.message))
 
 const dateTimeFmt = new Intl.DateTimeFormat('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })
 
@@ -513,13 +512,12 @@ function RunsCard({ refreshKey }: { refreshKey: string }) {
     <Card
       title="회차 기록"
       right={
-        <a
-          href={exportCsvUrl()}
-          download
+        <button
+          onClick={() => downloadRunCsv()}
           className="ml-auto rounded-full bg-border px-5 py-1.5 text-sm font-semibold hover:bg-divider"
         >
           전체 CSV
-        </a>
+        </button>
       }
     >
       <div className="max-h-96 overflow-y-auto px-5 pb-5 pt-4">
@@ -547,9 +545,9 @@ function RunsCard({ refreshKey }: { refreshKey: string }) {
                   <td className="text-grade-mid">{r.stats.중}</td>
                   <td>{r.stats.total}</td>
                   <td className="text-right">
-                    <a href={exportCsvUrl(r.id)} download className="text-sm text-info underline-offset-4 hover:underline">
+                    <button onClick={() => downloadRunCsv(r.id)} className="text-sm text-info underline-offset-4 hover:underline">
                       CSV
-                    </a>
+                    </button>
                   </td>
                 </tr>
               ))}
