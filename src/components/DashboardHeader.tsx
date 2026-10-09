@@ -25,7 +25,7 @@ type Props = {
 
 export default function DashboardHeader({ connection, state, detail }: Props) {
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 h-header px-20 flex items-center justify-between bg-main-2/50 border-b border-border shadow-[0_0_20px_rgba(0,0,0,0.3)] backdrop-blur-xl">
+    <header className="fixed top-0 left-0 right-0 z-50 h-header px-20 flex items-center justify-between bg-main-3 border-b border-divider shadow-card">
       <Link to={paths.landing}>
         <img src="/logo.png" alt="logo" className="h-8" />
       </Link>
