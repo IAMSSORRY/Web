@@ -30,7 +30,7 @@ export function useJudgeStream() {
     let retry: ReturnType<typeof setTimeout> | undefined
     let disposed = false
     let boxTimer: ReturnType<typeof setTimeout> | undefined
-    // 모션의 굴림 결과를 반영해 다시 저장하려고 마지막 판정을 들고 있는다.
+    // 모션의 떨어뜨림 결과를 반영해 다시 저장하려고 마지막 판정을 들고 있는다.
     let lastJudge: LiveJudge | null = null
 
     const persist = (records: LiveJudge[]) =>

@@ -36,7 +36,7 @@ function done(tx: IDBTransaction) {
   })
 }
 
-// 같은 판정이 다시 오면(재연결 snapshot, 굴림 결과 반영) 덮어쓴다.
+// 같은 판정이 다시 오면(재연결 snapshot, 떨어뜨림 결과 반영) 덮어쓴다.
 export async function saveJudges(records: (JudgeRecord & { cam?: string })[]) {
   if (!records.length) return
   const db = await open()

@@ -11,7 +11,7 @@ const HEADERS: Record<string, string> = {
   threshold: '빨강 기준',
   dark_ratio: '흠 비율',
   dark_max: '흠 기준',
-  roll_detected: '굴림',
+  roll_detected: '떨어뜨림',
   cam: '카메라',
 }
 

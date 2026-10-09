@@ -313,7 +313,7 @@ function MissionCard({ mission, events }: { mission: MissionState | null; events
             <Stat label="파지 성공" value={mission.picks_ok} />
             <Stat label="파지 실패" value={mission.picks_failed} tone={mission.picks_failed ? 'text-grade-low' : ''} />
             <Stat label="건너뜀" value={mission.skipped} tone={mission.skipped ? 'text-grade-mid' : ''} />
-            {/* 굴림 적응: 굴림이 나면 하강 속도와 놓는 높이를 낮춘다. */}
+            {/* 자동 조정: 사과를 떨어뜨리면 하강 속도와 놓는 높이를 낮춘다. */}
             <Stat label="하강 속도" value={mission.adaptive ? `×${mission.adaptive.scale.toFixed(2)}` : '—'} />
             <Stat label="놓는 높이" value={mission.adaptive ? `${(mission.adaptive.release_h * 100).toFixed(1)}cm` : '—'} />
           </div>
@@ -464,7 +464,7 @@ function SummaryCard({ total, cycleTime }: { total: number; cycleTime: number | 
 
 function RollBadge({ value }: { value: boolean | null }) {
   if (value === null) return <span className="text-white/40">대기</span>
-  return value ? <span className="text-grade-low">굴림</span> : <span className="text-info">정상</span>
+  return value ? <span className="text-grade-low">떨어뜨림</span> : <span className="text-info">정상</span>
 }
 
 function HistoryCard({ recent }: { recent: LiveJudge[] }) {
@@ -480,7 +480,7 @@ function HistoryCard({ recent }: { recent: LiveJudge[] }) {
               <th className="font-medium">신뢰도</th>
               <th className="font-medium">빨강 / 기준</th>
               <th className="font-medium">흠 / 기준</th>
-              <th className="font-medium">굴림</th>
+              <th className="font-medium">떨어뜨림</th>
             </tr>
           </thead>
           <tbody className="tabular-nums">
@@ -505,7 +505,7 @@ function HistoryCard({ recent }: { recent: LiveJudge[] }) {
 
 async function downloadCsv() {
   const rows = await loadJudges()
-  const header = ['번호', '시각', '등급', '신뢰도', '빨강 비율', '빨강 기준', '흠 비율', '흠 기준', '굴림', '카메라']
+  const header = ['번호', '시각', '등급', '신뢰도', '빨강 비율', '빨강 기준', '흠 비율', '흠 기준', '떨어뜨림', '카메라']
   const yesNo = (v: boolean | null) => (v === null ? '' : v ? '예' : '아니오')
   const lines = rows.map((r) =>
     [r.id, formatTs(r.ts), r.grade, r.confidence, r.v_value ?? '', r.threshold ?? '', r.extra?.dark_ratio ?? '', r.extra?.dark_max ?? '', yesNo(r.roll_detected), r.cam ?? ''].join(','),
@@ -649,7 +649,7 @@ function useIssueToasts(issues: Issue[] | null) {
 function useRollToast(motion: ReturnType<typeof useJudgeStream>['motion']) {
   useEffect(() => {
     if (motion?.roll_detected) {
-      toast('warning', '굴림이 감지되었습니다', '다음 동작의 접근 속도와 적재 높이를 낮춥니다')
+      toast('warning', '사과를 떨어뜨렸습니다', '다음 동작의 접근 속도와 적재 높이를 낮춥니다')
     }
   }, [motion])
 }
@@ -703,7 +703,7 @@ export default function Dashboard() {
               ? [{ key: 'stalled', label: '로봇 응답 없음', level: 'warn' as const, detail: stalledReason(judge.missionEvents) ?? '로봇에서 소식이 끊겼습니다' }]
               : []),
             ...(judge.mission?.adaptive?.frozen
-              ? [{ key: 'frozen', label: '자동 조정 중단', level: 'warn' as const, detail: '굴림 자동 조정이 멈췄습니다. 점검이 필요합니다' }]
+              ? [{ key: 'frozen', label: '자동 조정 중단', level: 'warn' as const, detail: '떨어뜨림 자동 조정이 멈췄습니다. 점검이 필요합니다' }]
               : []),
             ...(!topCam?.live
               ? [{ key: 'camera', label: '카메라 문제', level: 'warn' as const, detail: polite(topCam?.error) ?? '고정 카메라에서 영상이 들어오지 않습니다' }]
