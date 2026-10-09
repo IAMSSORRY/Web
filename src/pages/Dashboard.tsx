@@ -828,12 +828,16 @@ type AdviceResult = { status: 'loading' } | { status: 'done'; advice: Advice } |
 
 const fmtAdviceTime = (t: Advice['generated_at']) => fmtTime(typeof t === 'number' ? t : Date.parse(t) / 1000)
 
-function AdviceCard() {
-  const [results, setResults] = useState<AdviceResult[] | null>(null)
-  const loading = results?.some((r) => r.status === 'loading') ?? false
+const allLoading = (): AdviceResult[] => ADVICE_TOPICS.map(() => ({ status: 'loading' }))
 
-  const onAnalyze = () => {
-    setResults(ADVICE_TOPICS.map(() => ({ status: 'loading' })))
+// 카드가 나타나면(페이지를 열 때, 새 회차가 시작될 때) 바로 한 번 분석한다.
+function AdviceCard() {
+  const [results, setResults] = useState<AdviceResult[] | null>(allLoading)
+  const loading = results?.some((r) => r.status === 'loading') ?? false
+  // 개발 모드(StrictMode)는 effect 를 두 번 돌리므로 한 번만 요청하게 막는다.
+  const started = useRef(false)
+
+  const request = () => {
     ADVICE_TOPICS.forEach((topic, i) => {
       api
         .advice(topic.question + ADVICE_RULES)
@@ -842,6 +846,18 @@ function AdviceCard() {
         .catch((err: Error): AdviceResult => ({ status: 'error', message: polite(err.message) }))
         .then((result) => setResults((prev) => prev && prev.map((r, j) => (j === i ? result : r))))
     })
+  }
+
+  useEffect(() => {
+    if (started.current) return
+    started.current = true
+    // 처음 한 번만 실행한다.
+    request()
+  }, [])
+
+  const onAnalyze = () => {
+    setResults(allLoading())
+    request()
   }
 
   const meta = results?.find((r) => r.status === 'done')
@@ -855,7 +871,7 @@ function AdviceCard() {
           disabled={loading}
           className="ml-auto rounded-full bg-border px-5 py-1.5 text-sm font-semibold hover:bg-divider disabled:opacity-40"
         >
-          {loading ? '분석 중…' : results ? '다시 분석' : '분석하기'}
+          {loading ? '분석 중…' : '다시 분석'}
         </button>
       }
     >
@@ -1281,8 +1297,14 @@ export default function Dashboard() {
             <RunsCard refreshKey={`${runsKey}-${judge.stats.total}`} />
             <div className="grid gap-4 lg:grid-cols-2 lg:gap-6">
               <LocalArchiveCard version={judge.savedVersion} />
-              {/* 회차가 바뀌면(새 회차 시작) 이전 회차에 대한 답변을 비운다. */}
-              <AdviceCard key={judge.runId ?? 'none'} />
+              {/* 현재 회차를 확인한 뒤에 만들고, 회차가 바뀌면(새 회차 시작) 새로 만들어 다시 분석한다. */}
+              {judge.runId !== null ? (
+                <AdviceCard key={judge.runId} />
+              ) : (
+                <Card title="AI 분석">
+                  <p className="px-5 pb-6 pt-4 text-sm text-info">기록을 불러오는 중입니다</p>
+                </Card>
+              )}
             </div>
           </div>
         </Section>
