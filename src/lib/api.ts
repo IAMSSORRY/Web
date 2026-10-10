@@ -36,7 +36,8 @@ export type JudgeRecord = {
 }
 
 // stalled: 진행 중이었는데 로봇 소식이 끊김. 이벤트가 다시 오면 서버가 running 으로 되돌린다.
-export type MissionStatus = 'idle' | 'running' | 'stalled' | 'finished' | 'estop'
+// paused: 운영자가 '정지'로 멈춤(모터는 켜 둠). stalled(응답 없음), estop(비상정지)과 다르다.
+export type MissionStatus = 'idle' | 'running' | 'paused' | 'stalled' | 'finished' | 'estop'
 // nudge: 벽에 붙은 사과를 가운데로 굴리는 중, estop_return / estop_rest: 비상정지 때 사과 되돌리기 / 팔 내리기
 export type MissionPhase = 'pick' | 'inspect' | 'place' | 'home' | 'nudge' | 'estop_return' | 'estop_rest'
 
@@ -72,7 +73,8 @@ export type ArmStatus = {
 
 // 로봇 미션 프로그램 상태(GET /control/status 와 모든 제어 응답)
 // stopping: 정리 후 정지 진행 중, estopped: 비상정지, error: 오류로 그 자리 정지(힘 이상 등)
-export type RobotState = 'idle' | 'running' | 'stopping' | 'estopped' | 'error' | 'done'
+// stopped: '정지'로 그 자리에 멈춤(모터는 켜 둠). '이어서'(resume)로 다시 진행한다.
+export type RobotState = 'idle' | 'running' | 'stopped' | 'stopping' | 'estopped' | 'error' | 'done'
 export type ControlStatus = {
   ok?: boolean
   message?: string
@@ -141,7 +143,7 @@ export const api = {
     status: () => request<ControlStatus>('/control/status'),
     // "all" 이면 개수 제한 없이 사과가 없을 때까지 한다.
     start: (apples: number | 'all' = 'all') => control('/control/start', { apples }),
-    // 지금 사과까지만 하고 멈춘다.
+    // 정지: 그 자리에서 즉시 멈춘다(비상정지 아님, 모터는 켠 채). state 가 stopped 가 되고 resume 으로 이어서 한다.
     stop: () => control('/control/stop'),
     // 그 자리에서 즉시 정지하고 모터를 멈춘다(약 0.2초). 팔을 낮추지 않는다. 여러 번 보내도 된다.
     estop: () => control('/control/estop'),

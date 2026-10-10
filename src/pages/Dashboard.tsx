@@ -314,6 +314,7 @@ const phaseLabel: Record<MissionPhase, string> = {
 const statusLabel: Record<MissionState['status'], { text: string; className: string }> = {
   idle: { text: '대기 중', className: 'bg-border text-info' },
   running: { text: '진행 중', className: 'bg-grade-high text-black' },
+  paused: { text: '정지됨', className: 'bg-grade-mid text-black' },
   stalled: { text: '응답 없음', className: 'bg-grade-mid text-black' },
   finished: { text: '완료', className: 'bg-white text-black' },
   estop: { text: '비상정지', className: 'bg-grade-low text-black' },
@@ -334,7 +335,7 @@ function stalledReason(events: MissionEvent[]) {
   return typeof reason === 'string' ? polite(reason) : undefined
 }
 
-type ControlAction = 'start' | 'stop' | 'park'
+type ControlAction = 'start' | 'stop' | 'resume' | 'park'
 
 function MissionCard({
   mission,
@@ -357,6 +358,8 @@ function MissionCard({
 }) {
   const running = robotState ? robotState === 'running' : mission?.status === 'running' || mission?.status === 'stalled'
   const halted = robotState === 'estopped' || robotState === 'error'
+  // 운영자가 '정지'로 멈춘 상태(모터는 켜 둠). '이어서'로 다시 진행한다.
+  const paused = robotState ? robotState === 'stopped' : mission?.status === 'paused'
   // 로봇 프로그램에 닿지 못하면 시작 명령을 보낼 곳이 없다.
   const offline = robotState === null
   const btn = 'rounded-full px-4 py-0.5 font-semibold disabled:opacity-40'
@@ -377,11 +380,18 @@ function MissionCard({
         <div className="ml-auto flex items-center gap-2 text-sm">
           {mission?.sim && <span className="rounded-full border border-border px-3 py-0.5 text-info">시뮬레이션</span>}
           {status && <span className={`rounded-full px-3 py-0.5 font-semibold ${status.className}`}>{status.text}</span>}
-          {robotState === 'stopping' ? null : running ? (
+          {robotState === 'stopping' ? null : running || paused ? (
             <>
-              <button onClick={() => onControl('stop')} disabled={pending !== null} className={`${btn} bg-border hover:bg-divider`}>
-                {pending === 'stop' ? '요청 중' : '이번 사과까지만'}
-              </button>
+              {paused ? (
+                <button onClick={() => onControl('resume')} disabled={pending !== null} className={`${btn} bg-white text-black`}>
+                  {pending === 'resume' ? '요청 중' : '이어서'}
+                </button>
+              ) : (
+                // 그 자리에서 즉시 멈춘다(비상정지 아님, 모터는 켠 채)
+                <button onClick={() => onControl('stop')} disabled={pending !== null} className={`${btn} bg-border hover:bg-divider`}>
+                  {pending === 'stop' ? '요청 중' : '정지'}
+                </button>
+              )}
               {/* 위급하지 않을 때: 사과를 되돌리고 팔을 내린 뒤 멈춘다 */}
               <button onClick={() => onControl('park')} disabled={pending !== null} className={`${btn} bg-border text-grade-low hover:bg-divider`}>
                 {pending === 'park' ? '요청 중' : '정리 후 정지'}
@@ -419,6 +429,8 @@ function MissionCard({
                     ? offline
                       ? '로봇 상태 모름'
                       : '비상정지'
+                    : paused
+                      ? '정지됨'
                     : mission.status === 'stalled'
                       ? `${mission.phase ? `${phaseLabel[mission.phase] ?? mission.phase}에서 ` : ''}멈춤`
                       : mission.phase
@@ -511,6 +523,15 @@ function describeEvent(e: MissionEvent): { text: string; tone?: string } | null 
     case 'skip': {
       const reason = f(e, 'reason')
       return { text: `사과 ${f(e, 'index')} 건너뜀${reason ? ` (${polite(String(reason))})` : ''}`, tone: 'text-grade-mid' }
+    }
+    case 'collision': {
+      // 벽 등에 부딪혀 팔을 원위치하고 다시 시도한다(미션은 계속).
+      const reason = f(e, 'reason')
+      return { text: `충돌 감지 — 원위치 후 다시 시도${reason ? ` (${polite(String(reason))})` : ''}`, tone: 'text-grade-mid' }
+    }
+    case 'pause': {
+      const reason = f(e, 'reason')
+      return { text: `정지${reason ? ` (${polite(String(reason))})` : ''}`, tone: 'text-grade-mid' }
     }
     case 'adaptive': {
       const scale = Number(f(e, 'scale'))
@@ -1223,7 +1244,10 @@ export default function Dashboard() {
         toast('success', '미션을 시작했습니다')
       } else if (action === 'stop') {
         await api.control.stop()
-        toast('info', '이번 사과까지만 하고 멈춥니다')
+        toast('info', '정지했습니다', '이어서를 누르면 멈춘 사과부터 다시 진행합니다')
+      } else if (action === 'resume') {
+        await api.control.resume()
+        toast('success', '이어서 진행합니다')
       } else {
         // park 는 정리가 끝난 뒤에(수 초) 응답하므로 누르는 즉시 먼저 알린다.
         toast('info', '정리 후 정지를 시작합니다', '사과를 되돌리고 팔을 내린 뒤 멈춥니다. 급하면 비상정지를 누르세요')
@@ -1231,7 +1255,12 @@ export default function Dashboard() {
         toast('success', '정리 후 정지했습니다', '해제하면 이어서 진행합니다')
       }
     } catch (e) {
-      const failed = { start: '미션을 시작하지 못했습니다', stop: '정지하지 못했습니다', park: '정리 후 정지를 하지 못했습니다' }[action]
+      const failed = {
+        start: '미션을 시작하지 못했습니다',
+        stop: '정지하지 못했습니다',
+        resume: '이어서 진행하지 못했습니다',
+        park: '정리 후 정지를 하지 못했습니다',
+      }[action]
       toast('error', failed, polite((e as Error).message))
     } finally {
       setPending(null)
