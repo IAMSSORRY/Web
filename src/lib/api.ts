@@ -79,6 +79,8 @@ export type ControlStatus = {
   state: RobotState
   error: string | null
   index: number | null
+  // 이번 미션에 칸별로 놓은 개수. 칸이 차면 로봇이 그 칸에 더 놓지 않는다(사람이 비우면 clear 로 알린다).
+  placed?: Partial<Record<Grade, number>>
   ts: number
 }
 
@@ -145,6 +147,8 @@ export const api = {
     estop: () => control('/control/estop'),
     // 정리 후 정지: 쥔 사과를 되돌리고 팔을 낮게 내린 뒤 비상정지한다. 수 초 걸린다.
     park: () => control('/control/park'),
+    // 칸 비움: 사람이 칸을 비웠다고 로봇에 알린다(grade 생략 = 전체). 로봇이 그 칸에 다시 놓는다.
+    clear: (grade?: Grade) => control('/control/clear', grade ? { grade } : {}),
     // 비상정지(또는 오류 정지) 해제 → 멈춘 사과부터 이어서 한다. 모터를 다시 켜느라 몇 초 걸린다.
     // 로봇이 해제에 실패하면 ok 없이 state 가 그대로 estopped/error 로 올 수 있어 상태로도 판단한다.
     resume: async () => {

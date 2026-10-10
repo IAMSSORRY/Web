@@ -342,6 +342,8 @@ function MissionCard({
   robotState,
   pending,
   onControl,
+  placed,
+  onClear,
 }: {
   mission: MissionState | null
   events: MissionEvent[]
@@ -349,6 +351,9 @@ function MissionCard({
   robotState: RobotState | null
   pending: ControlAction | null
   onControl: (action: ControlAction) => void
+  // 이번 미션에 칸별로 놓은 개수(로봇 기록)
+  placed: Partial<Record<Grade, number>>
+  onClear: (grade?: Grade) => void
 }) {
   const running = robotState ? robotState === 'running' : mission?.status === 'running' || mission?.status === 'stalled'
   const halted = robotState === 'estopped' || robotState === 'error'
@@ -395,7 +400,7 @@ function MissionCard({
           )}
         </div>
       }
-      className="min-h-[330px] lg:h-[330px]"
+      className="min-h-[330px]"
     >
       {!mission ? (
         <p className="flex flex-1 items-center justify-center text-info">미션 정보를 기다리는 중</p>
@@ -437,6 +442,25 @@ function MissionCard({
             <Stat label="하강 속도" value={mission.adaptive ? `×${mission.adaptive.scale.toFixed(2)}` : '—'} />
             <Stat label="놓는 높이" value={mission.adaptive ? `${(mission.adaptive.release_h * 100).toFixed(1)}cm` : '—'} />
           </div>
+
+          {/* 로봇은 이번 미션에 놓은 자리를 기억해 그 위에 겹쳐 놓지 않는다. 사람이 칸을 비우면 '비움'으로 알려야 다시 놓는다. */}
+          {!offline && (
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <span className="text-info">상자 칸</span>
+              {(['상', '중', '하'] as const).map((g) => (
+                <span key={g} className="flex items-center gap-1 rounded-full border border-border py-0.5 pl-3 pr-1">
+                  <span className={`font-semibold ${gradeText[g]}`}>{g}</span>
+                  <span className="tabular-nums">{placed[g] ?? 0}개</span>
+                  <button onClick={() => onClear(g)} className="rounded-full px-2 text-info hover:bg-border hover:text-white">
+                    비움
+                  </button>
+                </span>
+              ))}
+              <button onClick={() => onClear()} className="rounded-full px-2 text-info hover:bg-border hover:text-white">
+                전체 비움
+              </button>
+            </div>
+          )}
 
           {robotState === 'stopping' && (
             <p className="text-sm font-semibold text-grade-low">
@@ -1180,6 +1204,16 @@ export default function Dashboard() {
   const abnormal = issues?.filter((i) => ['camera', 'arm', 'stalled', 'frozen'].includes(i.key)) ?? []
   useAutoEstop(abnormal, robotMoving, (reason) => sendEstop(reason))
 
+  // 칸 비움. 사람이 상자 칸을 비웠다고 로봇에 알려 그 칸에 다시 놓게 한다.
+  const onClear = async (grade?: Grade) => {
+    try {
+      await api.control.clear(grade)
+      toast('success', grade ? `'${grade}' 칸을 비웠습니다` : '모든 칸을 비웠습니다', '로봇이 다음 사과부터 그 칸에 다시 놓습니다')
+    } catch (e) {
+      toast('error', '칸 비움을 로봇에 전달하지 못했습니다', polite((e as Error).message))
+    }
+  }
+
   const [pending, setPending] = useState<ControlAction | null>(null)
   const onControl = async (action: ControlAction) => {
     setPending(action)
@@ -1242,7 +1276,15 @@ export default function Dashboard() {
             <ConfidenceCard average={average} />
           </div>
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-6">
-            <MissionCard mission={judge.mission} events={judge.missionEvents} robotState={robotState} pending={pending} onControl={onControl} />
+            <MissionCard
+              mission={judge.mission}
+              events={judge.missionEvents}
+              robotState={robotState}
+              pending={pending}
+              onControl={onControl}
+              placed={control?.placed ?? {}}
+              onClear={onClear}
+            />
             <MissionEventsCard events={judge.missionEvents} />
           </div>
           </div>
