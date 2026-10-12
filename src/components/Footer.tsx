@@ -56,6 +56,7 @@ export default function Footer() {
         <div className="flex flex-col gap-2">
           <p className="break-keep font-light text-sm text-white/60">이도건 — 랜딩페이지 · 로봇 제어</p>
           <p className="break-keep font-light text-sm text-white/60">김준현 — Full Stack</p>
+          <a href="mailto:lhy93380@gmail.com" className="break-keep font-light text-sm text-white/60">대표 이메일 - lhy93380@gmail.com</a>
           <p className="break-keep font-light text-sm text-white/60">대구소프트웨어마이스터고등학교</p>
         </div>
         
